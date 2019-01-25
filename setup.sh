@@ -1,6 +1,7 @@
 #!/bin/bash
 
-JBROWSE_BUILD_MIN=${JBROWSE_BUILD_MIN:=1}
+# JBROWSE_BUILD_MIN=${JBROWSE_BUILD_MIN:=1}
+JBROWSE_BUILD_MIN=0
 # check the exit status of the command, and print the last bit of the log if it fails
 done_message () {
     if [ $? == 0 ]; then

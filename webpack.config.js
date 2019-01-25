@@ -12,7 +12,8 @@ const webpack = require("webpack")
 
 // if JBROWSE_BUILD_MIN env var is 1 or true, then we also minimize the JS
 // and forego generating source maps
-const DEBUG = ! [1,'1','true'].includes(process.env.JBROWSE_BUILD_MIN)
+// const DEBUG = ! [1,'1','true'].includes(process.env.JBROWSE_BUILD_MIN)
+const DEBUG = 1
 
 var webpackConf = {
     entry: {
