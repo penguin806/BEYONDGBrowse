@@ -120,7 +120,7 @@ return declare( [BlockBasedTrack,ExportMixin, DetailStatsMixin ], {
         }
     },
 
-    getFeatures: function( query, callback, errorCallback ) {
+    getFeatures: function( query, featureCallback, endCallback, errorCallback ) {
         this.store.getFeatures.apply( this.store, arguments );
     },
 
