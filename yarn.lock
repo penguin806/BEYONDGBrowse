@@ -120,10 +120,10 @@
   dependencies:
     arrify "^1.0.1"
 
-"@gmod/bam@^1.0.13":
-  version "1.0.13"
-  resolved "https://registry.yarnpkg.com/@gmod/bam/-/bam-1.0.13.tgz#daa9e68f7854deb32ee84b0bd085c32fcfc1839a"
-  integrity sha512-3VYsJm73vwNVn2+5V3s5uXcFgwKZ1oI7vDXwkTuD/Pum7V74tkwut3EQqqL1L9/dKPU9bsjxrP0qJRpKq3FnoQ==
+"@gmod/bam@^1.0.14":
+  version "1.0.14"
+  resolved "https://registry.yarnpkg.com/@gmod/bam/-/bam-1.0.14.tgz#928c645165d2c1896f732a4e46952be8c63bb04f"
+  integrity sha512-X4BsRV3lYDqJsoZ08VWLqi0zYQTMOlKznRkXPZ0R3NXbbzQUkxLsBqk58M/LAqvUpAaF7PPvad071kDSaDd7IQ==
   dependencies:
     "@gmod/bgzf-filehandle" "^1.2.2"
     buffer-crc32 "^0.2.13"
@@ -147,10 +147,10 @@
   dependencies:
     long "^4.0.0"
 
-"@gmod/cram@^1.5.0":
-  version "1.5.0"
-  resolved "https://registry.yarnpkg.com/@gmod/cram/-/cram-1.5.0.tgz#118ed06d485efb6032dd1b0058862990cb388b26"
-  integrity sha512-M0jLKcAcsAxamhM6nUWBdSvQhfTsPbyuFDhrF5JXX8IcKP3PZicOmOtZU72lINfVqK5yINbR/rjHL3xAKN28ZA==
+"@gmod/cram@^1.5.1":
+  version "1.5.1"
+  resolved "https://registry.yarnpkg.com/@gmod/cram/-/cram-1.5.1.tgz#a83bdfcb4532a57ed66407fe1d3ab9b94659ebaf"
+  integrity sha512-2BUOLfrMmd4SxvJVOXn2MftvDYGsPb9FYxEV4bXB+wR+TFA3C36Xm8vhRp8bW518f/2w8e6PXM/YUPGvaVb8Qg==
   dependencies:
     "@gmod/binary-parser" "^1.3.2"
     babel-runtime "^6.26.0"

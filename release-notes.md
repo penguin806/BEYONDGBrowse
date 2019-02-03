@@ -1,3 +1,31 @@
+# Release 1.16.2     2019-02-01 03:31:36 UTC
+
+## Minor improvements
+
+ * Allow configuring the cache busting behavior for adding random ?v= value
+   to config file requests. This can be configured in index.html. Thanks to
+   user @sandilyaamit for reporting, this is actually important to disable
+   when using Amazon presigned URLs (@cmdcolin)
+
+ * Adds `fixBounds` config for XYPlot tracks which can be set to false to
+   disable the behavior of rounding up or down on the min_score/max_score
+   variables for the ruler. Thanks to @scottcain for the suggestion
+   (pull #1306, @cmdcolin)
+
+## Bug fixes
+
+ * Fix ability to use CSI indexes with BAM files since 1.16.0 (@cmdcolin)
+
+ * Fix ability to read some CRAM files with unmapped mates (@cmdcolin)
+
+ * Fix issue with the browser loading NaN locations on startup (@cmdcolin)
+
+ * Add fix for exporting GFF3 for newer browsers that have Array.values()
+   enabled. Thanks to Scott Cain for reporting (@cmdcolin)
+
+ * Improve error message when refSeqs=file.fai config fails to load
+   (@cmdcolin)
+
 # Release 1.16.1     2018-12-28 02:24:11 UTC
 
 ## Minor improvements
@@ -6,6 +34,8 @@
    browser load for very large tracklists (@cmdcolin)
 
  * Updated to webpack 4 for some faster build times (pull #1270, @cmdcolin)
+
+ * Updated to use dojo/dijit/dojox 1.14 (@cmdcolin)
 
  * Updated NeatCanvasFeatures to allow non-coding transcripts to be colored
    differently with `style->unprocessedTranscriptColor`. Thanks to @billzt

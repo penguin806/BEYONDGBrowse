@@ -1,7 +1,7 @@
 {
   "name": "@gmod/jbrowse",
   "main": "browser/main.js",
-  "version": "1.16.1",
+  "version": "1.16.2",
   "description": "JBrowse - client-side genome browser",
   "repository": "https://github.com/GMOD/jbrowse.git",
   "scripts": {
@@ -40,8 +40,8 @@
     "shelljs": "^0.7.8"
   },
   "devDependencies": {
-    "@gmod/bam": "^1.0.13",
-    "@gmod/cram": "^1.5.0",
+    "@gmod/bam": "^1.0.14",
+    "@gmod/cram": "^1.5.1",
     "@gmod/gff": "^1.1.1",
     "@gmod/indexedfasta": "^1.0.11",
     "@gmod/tabix": "^1.1.3",
