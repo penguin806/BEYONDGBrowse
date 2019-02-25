@@ -17,7 +17,7 @@ function (
     UnprocessedTranscript,
 
 ) {
-    return declare([Gene, Box], {
+    return declare(Gene, {
         _boxGlyph: function () {
             return this.__boxGlyph || (this.__boxGlyph = new Box({ track: this.track, browser: this.browser, config: this.config }));
         },

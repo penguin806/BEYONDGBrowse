@@ -205,9 +205,6 @@ return declare( ExportBase,
                                 ? array.map( val, s => gff.util.escape( s ) ).join(',')
                                 :
 
-                            val instanceof Object
-                                ? gff.util.escape(JSON.stringify(val))
-                                :
                             val.values
                                 ? val instanceof Array
                                         ? array.map( val, s => gff.util.escape( s ) ).join(',')

@@ -1,18 +1,3 @@
-# Release 1.16.3     2019-02-21 00:48:52 UTC
-
-## Bug fixes
-
- * Fix BioPerl setup after changes to the BioPerl distribution caused
-   setup.sh to fail in all past JBrowse versions (issue #1310, @cmdcolin)
-
- * Fix issue with NeatCanvasFeatures not drawing gradients on some
-   features. Thanks to @mara-sangiovanni for reporting (issue #1311,
-   @cmdcolin)
-
- * Fix issue for exporting GFF3 for some nested attributes by dumping
-   JSON into the value field. Thanks to @dionnezaal for reporting
-   (issue #1309, @cmdcolin)
-
 # Release 1.16.2     2019-02-01 03:31:36 UTC
 
 ## Minor improvements
