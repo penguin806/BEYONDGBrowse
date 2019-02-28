@@ -1,6 +1,6 @@
 # JBrowse - Snow Private Version
 ## Introduction
-Develop based on [GMOD/jbrose](https://github.com/GMOD/jbrowse) to implement some new features.
+Develop based on [GMOD/jbrowse](https://github.com/GMOD/jbrowse) to implement some new features.
 
 Including:
 * My custom track type
