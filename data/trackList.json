@@ -1,0 +1,13 @@
+{
+    "tracks": [
+        {
+            "compress" : 0,
+            "key" : "CanvasFeatures - transcripts",
+            "label" : "Transcript",
+            "storeClass" : "JBrowse/Store/SeqFeature/NCList",
+            "trackType" : "JBrowse/View/Track/CanvasFeatures",
+            "type" : "JBrowse/View/Track/CanvasFeatures",
+            "urlTemplate" : "Transcript/{refseq}/trackData.json"
+        }
+    ]
+}
