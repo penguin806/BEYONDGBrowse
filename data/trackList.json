@@ -2,13 +2,15 @@
     "tracks": [
         {
             "compress" : 0,
-            "key" : "CanvasFeatures - transcripts",
-            "label" : "Transcript",
+            "key" : "基因注解",
+            "label" : "基因注解",
             "storeClass" : "JBrowse/Store/SeqFeature/NCList",
-            "trackType" : "JBrowse/View/Track/CanvasFeatures",
-            "type" : "JBrowse/View/Track/CanvasFeatures",
-            "urlTemplate" : "Transcript/{refseq}/trackData.json",
-            "category" : "Miscellaneous"
+            "style" : {
+                "className" : "feature"
+            },
+            "trackType" : null,
+            "type" : "FeatureTrack",
+            "urlTemplate" : "tracks/gencode.v29.annotation.gff3/{refseq}/trackData.json"
         }
     ]
 }
