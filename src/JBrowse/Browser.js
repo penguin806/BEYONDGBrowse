@@ -1447,13 +1447,12 @@ openFasta: function() {
 browserMeta: function() {
     var about = this.config.aboutThisBrowser || {};
     about.title = about.title || 'JBrowse';
-    console.info(this.config.aboutThisBrowser);
 
     var verstring = this.version;
 
     if( about.description ) {
         about.description += '<div class="powered_by">'
-            + '基于<a target="_blank" href="https://github.com/penguin806/jbrowse">JBrowse 1.16.3'+'</a>'+'实现'
+            + '基于<a target="_blank" href="https://github.com/penguin806/BEYONDGBrowse">JBrowse 1.16.3'+'</a>'+'实现'
             + '</div>';
     }
     else {
