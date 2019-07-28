@@ -9,7 +9,7 @@
                 "className" : "feature"
             },
             "trackType" : null,
-            "type" : "FeatureTrack",
+            "type" : "CanvasFeatures",
             "urlTemplate" : "tracks/gencode.v29.annotation.gff3/{refseq}/trackData.json"
         }
     ]
