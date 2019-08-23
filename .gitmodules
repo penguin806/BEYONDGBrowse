@@ -1,0 +1,3 @@
+[submodule "plugins/SnowPlugin"]
+	path = plugins/SnowPlugin
+	url = https://github.com/penguin806/BEYONDGBrowsePlugin.git
