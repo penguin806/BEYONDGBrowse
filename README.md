@@ -15,7 +15,7 @@ Including:
     ├── img
     └── js
         ├── main.js
-        ├── SnowPlugin.profile.js
+        ├── BEYONDGBrowse.profile.js
         └── View
             └── Track
                 ├── CanvasFeaturesTest.js

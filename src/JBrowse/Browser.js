@@ -1452,7 +1452,7 @@ browserMeta: function() {
 
     if( about.description ) {
         about.description += '<div class="powered_by">'
-            + '基于<a target="_blank" href="https://github.com/penguin806/BEYONDGBrowse">JBrowse 1.16.3'+'</a>'+'实现'
+            + '基于<a target="_blank" href="https://github.com/penguin806/BEYONDGBrowse">JBrowse 1.16.3'+'</a>'+'编写'
             + '</div>';
     }
     else {

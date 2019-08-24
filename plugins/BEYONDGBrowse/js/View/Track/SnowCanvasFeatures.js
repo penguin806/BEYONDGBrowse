@@ -2,22 +2,28 @@
 define(
     [
         'dojo/_base/declare',
+        'dojo/_base/lang',
         'dojo/request',
         'dojo/dom-construct',
         'dojo/Deferred',
         'dojo/topic',
         'JBrowse/View/Track/CanvasFeatures',
+        'JBrowse/View/TrackConfigEditor',
+        'JBrowse/View/ConfirmDialog',
         'JBrowse/Util',
         'JBrowse/CodonTable',
-        'SnowPlugin/View/Track/SnowHistogramTrack'
+        './SnowHistogramTrack'
     ],
     function (
         declare,
+        dojoLang,
         dojoRequest,
         domConstruct,
         dojoDeferred,
         dojoTopic,
         CanvasFeatures,
+        TrackConfigEditor,
+        ConfirmDialog,
         Util,
         CodonTable,
         SnowHistogramTrack
@@ -31,7 +37,14 @@ define(
             {
                 constructor: function(arg)
                 {
+                    let _this = this;
                     this._codonTable = this._codonTable ? this._codonTable : this.defaultCodonTable;
+                    // _this.browser.subscribe(
+                    //     '/jbrowse/v1/n/tracks/visibleChanged',
+                    //     function () {
+                    //         _this.redraw();
+                    //     }
+                    // );
                     //console.log(this.defaultCodonTable);
                     // this.makeYScale({
                     //     fixBounds: false,
@@ -41,13 +54,86 @@ define(
 
                 },
 
+                _defaultConfig: function(){
+                    let oldConfig = this.inherited(arguments);
+                    let newConfig = dojoLang.mixin(
+                        oldConfig,{
+                            showMzValue: false
+                        });
+
+                    return newConfig;
+                },
+
+                _trackMenuOptions: function() {
+                    let _this = this;
+                    // let oldTrackMenuOptions = _this.inherited(arguments);
+
+                    let newTrackMenuOptions = [
+                        {
+                            label: 'About this track',
+                            title: 'About track: '+(this.key||this.name),
+                            iconClass: 'jbrowseIconHelp',
+                            action: 'contentDialog',
+                            content: dojoLang.hitch(this,'_trackDetailsContent')
+                        },
+                        {
+                            label: 'Pin to top',
+                            type: 'dijit/CheckedMenuItem',
+                            title: "make this track always visible at the top of the view",
+                            checked: _this.isPinned(),
+                            onClick: function() {
+                                _this.browser.publish( '/jbrowse/v1/v/tracks/'+( this.checked ? 'pin' : 'unpin' ), [ _this.name ] );
+                            }
+                        },
+                        {
+                            label: 'Edit config',
+                            title: "edit this track's configuration",
+                            iconClass: 'dijitIconConfigure',
+                            action: function() {
+                                new TrackConfigEditor( _this.config )
+                                    .show( function( result ) {
+                                        // replace this track's configuration
+                                        _this.browser.publish( '/jbrowse/v1/v/tracks/replace', [result.conf] );
+                                    });
+                            }
+                        },
+                        {
+                            label: 'Delete track',
+                            title: "delete this track",
+                            iconClass: 'dijitIconDelete',
+                            action: function() {
+                                new ConfirmDialog({ title: 'Delete track?', message: 'Really delete this track?' })
+                                    .show( function( confirmed ) {
+                                        if( confirmed )
+                                            _this.browser.publish( '/jbrowse/v1/v/tracks/delete', [_this.config] );
+                                    });
+                            }
+                        },
+                        {
+                            type: 'dijit/MenuSeparator'
+                        },
+                        {
+                            label: 'Show M/Z Value',
+                            type: 'dijit/CheckedMenuItem',
+                            checked: !!_this.config.showMzValue,
+                            onClick: function(event){
+                                _this.config.showMzValue = this.checked;
+                                _this.changed();
+                            }
+                        }
+                    ];
+
+
+                    return newTrackMenuOptions;
+                },
+
                 _getLongestCommonSubSequenceMatrix: function(str1, str2)
                 {
-                    var result = [];
-                    for (var i = -1; i < str1.length; i = i + 1)
+                    let result = [];
+                    for (let i = -1; i < str1.length; i = i + 1)
                     {
                         result[i] = [];
-                        for (var j = -1; j < str2.length; j = j + 1)
+                        for (let j = -1; j < str2.length; j = j + 1)
                         {
                             if (i === -1 || j === -1)
                             {
@@ -185,7 +271,7 @@ define(
                     this._sortArrMSScanMassAndArrMSScanPeakAundance(arrMSScanMass, arrMSScanPeakAundance);
 
                     //ACIDS MASS AND COMMON PTM MASS, THE mapACIDMass can be extended by adding other PTM
-                    var mapACIDMass=new Map([
+                    let mapACIDMass=new Map([
                         ["G",57.0215],
                         ["A",71.0371],
                         ["S",87.032],
@@ -214,26 +300,26 @@ define(
                         ["Phosphorylation",79.96633]
                     ]);
 
-                    var iSCANNO=936;
-                    var intCurrentPos=0;
-                    var arrBIonPosition = [];//B 离子的序列position
-                    var arrBIonNUM = [];//B 离子的质谱position
+                    let iSCANNO=936;
+                    let intCurrentPos=0;
+                    let arrBIonPosition = [];//B 离子的序列position
+                    let arrBIonNUM = [];//B 离子的质谱position
 
-                    var iCurrentSeqPositionWithoutPTM=0;
-                    var dCurrentMassSUM=0.0;
-                    var boolPTM=false;
-                    var strPTM="";
-                    var dSpanThreshold=0.5;
+                    let iCurrentSeqPositionWithoutPTM=0;
+                    let dCurrentMassSUM=0.0;
+                    let boolPTM=false;
+                    let strPTM="";
+                    let dSpanThreshold=0.5;
 
 
                     function RecongnazieTheBIonPosition() {
 
-                        var dSpan=dSpanThreshold;//the span threshold with mass and percusor
-                        for (var j = intCurrentPos; j < arrMSScanMass.length; j++) {
+                        let dSpan=dSpanThreshold;//the span threshold with mass and percusor
+                        for (let j = intCurrentPos; j < arrMSScanMass.length; j++) {
 
                             //收敛到一点，向后探索
 
-                            var doubleCheckMassDistance = arrMSScanMass[j] - dCurrentMassSUM;
+                            let doubleCheckMassDistance = arrMSScanMass[j] - dCurrentMassSUM;
                             console.log("sum:",dCurrentMassSUM,"POS:",j," mass:",arrMSScanMass[j]," span:",doubleCheckMassDistance);
 
                             if (doubleCheckMassDistance > dSpan)
@@ -261,9 +347,9 @@ define(
                         arrBIonPosition.push(iCurrentSeqPositionWithoutPTM);
                     }
 
-                    for (var i = 0; i < strSenquence.length; i++) {
+                    for (let i = 0; i < strSenquence.length; i++) {
 
-                        var dCurrentMass=mapACIDMass.get(strSenquence[i]);
+                        let dCurrentMass=mapACIDMass.get(strSenquence[i]);
                         //console.log(i,dCurrentMass)
 
                         if(dCurrentMass!==undefined && boolPTM===false)
@@ -320,15 +406,15 @@ define(
                     }
 
 
-                    var num = [1, 3, 4, 5, 6, 8, 9, 14, 20, 23, 31, 55, 99];
-                    var nearly = new Array(100);
+                    let num = [1, 3, 4, 5, 6, 8, 9, 14, 20, 23, 31, 55, 99];
+                    let nearly = new Array(100);
 
                     function calculate() {
-                        var base = 10;
-                        var swap;
-                        for (var i = 0; i < num.length; i++) {
-                            var s = check(num[i], base);
-                            for (var j = 0; j < nearly.length; j++) {
+                        let base = 10;
+                        let swap;
+                        for (let i = 0; i < num.length; i++) {
+                            let s = check(num[i], base);
+                            for (let j = 0; j < nearly.length; j++) {
                                 if (s < check(nearly[j], base)) {
                                     swap = num[i];
                                     num[i] = nearly[j];
@@ -340,7 +426,7 @@ define(
                         console.log(arrBIonPosition);
                         console.log(arrBIonNUM);
 
-                        var arrBionPositionAndNumObject = [];
+                        let arrBionPositionAndNumObject = [];
                         for(let i=0; i<arrBIonPosition.length && i<arrBIonNUM.length; i++)
                         {
                             let newObject = {};
@@ -405,7 +491,7 @@ define(
                     isReverseStrand, scanId, mSScanMassMappingResultArray
                 )
                 {
-                    dojoTopic.publish('BEYONDGBrowse/showProteoform',
+                    dojoTopic.publish('BEYONDGBrowse/addSingleProteoformScan',
                         proteoformSequence, proteoformStartPosition, proteoformEndPosition,
                         isReverseStrand, scanId, mSScanMassMappingResultArray
                     );
@@ -440,6 +526,27 @@ define(
                     }
 
                 },
+
+                // showRange: function(
+                //     first, last, startBase,
+                //     bpPerBlock, scale,
+                //     containerStart, containerEnd, finishCallback
+                // ) {
+                //     console.log(arguments);
+                //     let _this = this;
+                //     let oldFinishCallback = finishCallback ? finishCallback : function() {};
+                //     let newFinishCallback = function(){
+                //         oldFinishCallback();
+                //         _this.browser.publish('BEYONDGBrowse/drawProteoformScans');
+                //     };
+                //     _this.inherited(
+                //         arguments,
+                //         [
+                //             first, last, startBase, bpPerBlock, scale,
+                //             containerStart, containerEnd, newFinishCallback
+                //         ]
+                //     );
+                // },
 
                 fillBlock: function(renderArgs)
                 {
@@ -631,6 +738,7 @@ define(
                                 let labelTextToAppend = ' (Scan: ' + thisProteoformObject.scanId + ')';
                                 if(!originalLabelText.includes(labelTextToAppend))
                                 {
+                                    _this.scanId = thisProteoformObject.scanId;
                                     _this.setLabel(originalLabelText + labelTextToAppend);
                                 }
 
@@ -664,6 +772,7 @@ define(
 
                                 console.info('filteredMSScanMassMappingResultArray:', filteredMSScanMassMappingResultArray);
                                 renderArgs.dataToDraw = filteredMSScanMassMappingResultArray;
+                                renderArgs.showMzValue = _this.config.showMzValue === true;
                                 // 12. Draw protein mass spectrum histogram within current block region
                                 //     X-Axis: m/z
                                 //     Y-Axis: intensity
