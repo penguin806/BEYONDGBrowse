@@ -199,7 +199,7 @@ define([
                             // Draw value above the label
                             ctx.fillText((Math.round(item.value * 100) / 100).toString(),
                                 barLeft_X + 1, barLeft_Y - 85);
-                            if(true)
+                            if(viewArgs.showMzValue)
                             {
                                 // Draw key under the X-axis
                                 ctx.fillStyle = '#7f8c8d';
