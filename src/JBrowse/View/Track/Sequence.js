@@ -38,8 +38,8 @@ return declare( [BlockBased, ExportMixin, CodonTable],
     constructor: function( args ) {
         this._charMeasurements = {};
         this._codonTable = this.generateCodonTable(lang.mixin(this.defaultCodonTable,this.config.codonTable));
-        this._codonStarts = this.config.codonStarts || this.defaultStarts
-        this._codonStops = this.config.codonStops || this.defaultStops
+        this._codonStarts = this.config.codonStarts || this.defaultStarts;
+        this._codonStops = this.config.codonStops || this.defaultStops;
     },
 
     _defaultConfig: function() {

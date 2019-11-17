@@ -45,7 +45,7 @@
     /*box-shadow: #2d3436 2px 3px 8px;*/
 /*}*/
 
-.Snow_translatedSequence td.Snow_aminoAcid_animation:hover {
+.Snow_translatedSequence td.Snow_aminoAcid_animation:hover,td.Snow_aminoAcid_animation.hoverState {
     box-shadow: #2d3436 2px 3px 8px;
     transform: rotate(360deg);
 }
@@ -56,6 +56,26 @@
 
 .Snow_translatedSequence td.Snow_aminoAcid_start {
     background-color: #7df6d5e6;
+}
+
+.Snow_translatedSequence td.Snow_aminoAcid_Hydrophile {
+    background-color: #81ecece6;
+}
+
+.Snow_translatedSequence td.Snow_aminoAcid_Hydrophobe {
+    background-color: #a29bfee6;
+}
+
+.Snow_translatedSequence td.Snow_aminoAcid_Acidity {
+    background-color: #ff7675e6;
+}
+
+.Snow_translatedSequence td.Snow_aminoAcid_Alkaline {
+    background-color: #ffeaa7e6;
+}
+
+.Snow_translatedSequence td.Snow_aminoAcid_Unknown {
+    background-color: #b2bec3e6;
 }
 
 .Snow_translatedSequence td.Snow_aminoAcid_mark_left_bottom::after {
@@ -80,7 +100,7 @@
     height: 98%;
 }
 
-.Snow_translatedSequence td.Snow_annotation_mark::after {
+.Snow_translatedSequence td.Snow_annotation_mark::before {
     content: "";
     position: absolute;
     left: 47%;
@@ -97,7 +117,7 @@
     border-radius: 6px;
     padding: 8px 4px;
     position: absolute;
-    width: 120%;
+    width: 80px;
     top: 50%;
     right: 110%;
     transform: translateY(-50%);
@@ -124,7 +144,7 @@
     border-radius: 6px;
     padding: 8px 4px;
     position: absolute;
-    width: 120%;
+    width: 70px;
     top: 50%;
     left: 110%;
     transform: translateY(-50%);
@@ -170,6 +190,18 @@
     position: absolute;
     bottom: 0;
     right: 2%;
+    font-family: monospace;
+    font-weight: normal;
+    font-size: x-small;
+    line-height: normal;
+}
+
+.Snow_translatedSequence td span.Snow_aminoAcid_head_strand_yIon_label {
+    color: #d63031;
+    text-align: center;
+    position: absolute;
+    top: 0;
+    left: 2%;
     font-family: monospace;
     font-weight: normal;
     font-size: x-small;

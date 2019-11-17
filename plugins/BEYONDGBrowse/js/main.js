@@ -1,20 +1,26 @@
 define([
         'dojo/_base/declare',
         'dojo/request',
+        'dojo/query',
+        'dojo/dom-construct',
         'dijit/form/Button',
         'dijit/MenuItem',
         'JBrowse/Plugin',
         './View/Dialog/SnowLocateDialog',
-        './View/Dialog/SnowMassTrackSettingDialog'
+        './View/Dialog/SnowMassTrackSettingDialog',
+        './View/Dialog/SnowDatasetSelectDialog'
     ],
     function(
         declare,
         dojoRequest,
+        dojoQuery,
+        domConstruct,
         dijitButton,
         dijitMenuItem,
         JBrowsePlugin,
         SnowLocateDialog,
-        SnowMassTrackSettingDialog
+        SnowMassTrackSettingDialog,
+        SnowDatasetSelectDialog
     ){
         return declare( JBrowsePlugin,
             {
@@ -26,11 +32,25 @@ define([
                     _this.browser = browser;
                     browser.config.massSpectraTrackNum =
                         browser.config.massSpectraTrackNum ? browser.config.massSpectraTrackNum : 0;
+                    browser.config.BEYONDGBrowseDatasetId =
+                        browser.config.BEYONDGBrowseDatasetId || 1;
                     let locateButtonDomNode = this._generateLocateButton();
                     _this._loadBeyondProteinTrackFromConfig();
                     _this._subscribeShowMassSpectraTrackEvent();
 
                     console.info('高通量多组学序列数据可视化浏览器 v1.0\nadmin@xuefeng.space\n指导老师: 钟坚成');
+
+                    browser.afterMilestone(
+                        'loadConfig',
+                        function () {
+                            let queryParam = window.location.search;
+                            let datasetRegExp = /([?&])BEYONDGBrowseDataset=(.*?)(&|$)/i;
+                            let extractResult = datasetRegExp.exec(queryParam);
+                            let BEYONDGBrowseDatasetId = parseInt(extractResult[2]);
+                            browser.config.BEYONDGBrowseDatasetId = BEYONDGBrowseDatasetId;
+                        }
+                    );
+
                     browser.afterMilestone('initView', function() {
                             let menuBar = browser.menuBar;
                             menuBar.appendChild(locateButtonDomNode);
@@ -43,6 +63,19 @@ define([
                                         iconClass: 'dijitIconConfigure',
                                         onClick: function () {
                                             _this._displayMassTrackSettingDialog(_this.browser);
+                                        }
+                                    }
+                                )
+                            );
+
+                            browser.addGlobalMenuItem(
+                                'file',
+                                new dijitMenuItem(
+                                    {
+                                        label: 'Dataset select',
+                                        iconClass: 'dijitIconDatabase',
+                                        onClick: function () {
+                                            _this._displayDatasetSelectDialog(_this.browser);
                                         }
                                     }
                                 )
@@ -64,6 +97,23 @@ define([
 
                 _subscribeShowMassSpectraTrackEvent: function() {
                     let _this = this;
+
+                    // Destroy the exist proteoform sequence when track hiding
+                    _this.browser.subscribe(
+                        '/jbrowse/v1/c/tracks/hide',
+                        function (trackToHideArray) {
+                            trackToHideArray.forEach(
+                                function (trackToHide) {
+                                    if(trackToHide.BEYONDGBrowseMassTrack === true)
+                                    {
+                                        dojoQuery(
+                                            '.snow_proteoform_frame.msScanMassTrackId_' + trackToHide.msScanMassTrackId
+                                        ).forEach(domConstruct.destroy);
+                                    }
+                                }
+                            );
+                        }
+                    );
 
                     function deleteAllMassSpectraTrack() {
                         let trackConfigsByName = _this.browser.trackConfigsByName;
@@ -129,6 +179,9 @@ define([
                     let _this = this;
                     let browserTrackConfig = _this.browser.config.tracks;
                     window.BEYONDGBrowseProteinTrack = _this.BEYONDGBrowseProteinTrack = undefined;
+                    window.BEYONDGBrowse = {
+                        mSScanMassResultArray: []
+                    };
 
                     for(let index in browserTrackConfig)
                     {
@@ -219,10 +272,86 @@ define([
                     massTrackSettingDialog.show();
                 },
 
+                _displayDatasetSelectDialog: function (browserObject)
+                {
+                    function updateQueryStringParameter(uri, key, value) {
+                        let re = new RegExp("([?&])" + key + "=.*?(&|$)", "i");
+                        let separator = uri.indexOf('?') !== -1 ? "&" : "?";
+                        if (uri.match(re)) {
+                            return uri.replace(re, '$1' + key + "=" + value + '$2');
+                        }
+                        else {
+                            return uri + separator + key + "=" + value;
+                        }
+                    }
+
+                    let _this = this;
+                    let requestUrl = 'http://' + (window.JBrowse.config.BEYONDGBrowseBackendAddr || '127.0.0.1')
+                        + ':12080' + '/datasets';
+
+                    dojoRequest(
+                        requestUrl,
+                        {
+                            method: 'GET',
+                            headers: {
+                                'X-Requested-With': null
+                            },
+                            handleAs: 'json'
+                        }
+                    ).then(
+                        function (datasetsList) {
+                            datasetsList.forEach(
+                                function (item, index, arrDatasets) {
+                                    arrDatasets[index].value = arrDatasets[index].id;
+                                    arrDatasets[index].label =
+                                        '(' + arrDatasets[index].id + ') ' +
+                                        arrDatasets[index].dataset_name;
+                                    if(parseInt(arrDatasets[index].id) === _this.browser.config.BEYONDGBrowseDatasetId)
+                                    {
+                                        arrDatasets[index].selected = true;
+                                    }
+                                }
+                            );
+                            console.info('datasetsList:', datasetsList);
+
+                            let datasetSelectDialog = new SnowDatasetSelectDialog(
+                                {
+                                    browser: browserObject,
+                                    datasetListInDatabase: datasetsList,
+                                    setCallback: function (selectedDatasetId) {
+                                        console.info('selectedDatasetId:', selectedDatasetId);
+                                        if(isNaN(selectedDatasetId) || selectedDatasetId < 1 || selectedDatasetId > 100)
+                                        {
+                                            return;
+                                        }
+                                        _this.browser.config.BEYONDGBrowseDatasetId = selectedDatasetId;
+                                        _this.browser.publish('BEYONDGBrowse/datasetIdChanged');
+                                        let newQueryParam =
+                                            updateQueryStringParameter(
+                                                window.location.search,
+                                                'BEYONDGBrowseDataset',
+                                                selectedDatasetId
+                                            );
+                                        console.info(window.location.search, newQueryParam);
+                                        window.location.search = newQueryParam;
+                                    }
+                                }
+                            );
+
+                            datasetSelectDialog.show();
+                        },
+                        function (errorReason) {
+                            console.error('Error', requestUrl, errorReason);
+                        }
+                    );
+                },
+
                 _queryProteinRegion: function (proteinName, finishCallback)
                 {
+                    let _this = this;
                     dojoRequest(
-                        'http://' + (window.JBrowse.config.BEYONDGBrowseBackendAddr || '127.0.0.1') + ':12080' + '/locate/' + proteinName,
+                        'http://' + (window.JBrowse.config.BEYONDGBrowseBackendAddr || '127.0.0.1') + ':12080'
+                        + '/' + _this.browser.config.BEYONDGBrowseDatasetId + '/locate/' + proteinName,
                         {
                             method: 'GET',
                             headers: {

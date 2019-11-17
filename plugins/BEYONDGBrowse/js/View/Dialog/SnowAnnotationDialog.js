@@ -35,7 +35,7 @@ define(
                     this.refName = args.refName;
                     this.position = args.position;
                     this.annotationObjectArray = args.annotationObjectArray;
-                    this.title = 'Annotation at [' + args.refName + ':' + args.position + ']';
+                    this.title = 'Annotation at [' + args.refName + ': ' + args.position + ']';
                     this.browser = args.browser;
                     this.annotationExistAtThisPosition =
                         ! (typeof args.annotationObjectArray != "object"
@@ -81,9 +81,12 @@ define(
                     _this.annotationTimeInput = new dijitTextBox(
                         {
                             id: 'annotation_version_string',
-                            value: this.annotationExistAtThisPosition ? _this.annotationObjectArray[0].time : '',
+                            value: this.annotationExistAtThisPosition ?
+                                _this.annotationObjectArray[0].time
+                                    .replace(/^(\d{4}-\d{2}-\d{2})(T)(\d{2}:\d{2}:\d{2}).*/, '$1 $3') : '',
                             placeHolder: '',
-                            style: "width: 100%"
+                            style: 'width: 99.7%',
+                            readOnly: 'readOnly'
                         }
                     );
 
@@ -92,7 +95,10 @@ define(
                             id: 'annotation_content_string',
                             value: this.annotationExistAtThisPosition ? _this.annotationObjectArray[0].contents : '',
                             placeHolder: '',
-                            style: "width: 100%"
+                            style: {
+                                width: '100%',
+                                height: '100px'
+                            }
                         }
                     );
 
@@ -108,24 +114,34 @@ define(
                 },
 
                 insertSpecificAnnotation: function() {
-                    let annotationTime = this.annotationTimeInput.get('value');
-                    let annotationContent = this.annotationContentInput.get('value');
+                    let _this = this;
+                    let annotationTime = _this.annotationTimeInput.get('value');
+                    let annotationContent = _this.annotationContentInput.get('value');
                     let requestUrl = 'http://' + (window.JBrowse.config.BEYONDGBrowseBackendAddr || '127.0.0.1')
-                        + ':12080' + '/annotation/insert/' + this.refName + '/' + this.position + '/';
-                    if(this.annotationExistAtThisPosition)
+                        + ':12080/';
+                    let URIParam =  _this.browser.config.BEYONDGBrowseDatasetId + '/annotation/insert/' + this.refName + '/' + this.position + '/';
+                    let currentDateTimeInMysqlFormat = _this._getCurrentTimeInMysqlFormat();
+                    if(
+                        this.annotationExistAtThisPosition
+                        && typeof _this.annotationObjectArray[0] === "object"
+                        && annotationContent === _this.annotationObjectArray[0].contents
+                    )
                     {
-                        requestUrl += annotationTime + '/' + annotationContent
+                        // Content not changed
+                        URIParam += annotationTime + '/' + annotationContent;
                     }
                     else
                     {
-                        let currentDateTimeInMysqlFormat = new Date().toISOString().slice(0, 19).replace('T', ' ');
-                        requestUrl += currentDateTimeInMysqlFormat + '/' + annotationContent
+                        URIParam += currentDateTimeInMysqlFormat + '/' + annotationContent;
                     }
 
                     dojoRequest(
-                        requestUrl,
+                        requestUrl + encodeURIComponent(URIParam),
                         {
                             method: 'GET',
+                            query: {
+                                author: _this.browser.config.BEYONDGBrowseUsername || 'Anonymous'
+                            },
                             headers: {
                                 'X-Requested-With': null
                             },
@@ -144,6 +160,21 @@ define(
                         dojoLang.hitch( this, 'destroyRecursive' ),
                         500
                     );
+                },
+
+                _getCurrentTimeInMysqlFormat: function () {
+                    let currentDateObject = new Date();
+                    let fullYear = currentDateObject.getFullYear();
+                    let month = currentDateObject.getMonth() + 1;
+                    let day = currentDateObject.getDate();
+                    let hour = currentDateObject.getHours();
+                    let minute = currentDateObject.getMinutes();
+                    let second = currentDateObject.getSeconds();
+
+                    let currentDateTimeInMysqlFormat =
+                        fullYear + '-' + month + '-' + day + ' '
+                        + hour + ':' + minute + ':' + second;
+                    return currentDateTimeInMysqlFormat;
                 }
             }
         );
