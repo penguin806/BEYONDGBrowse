@@ -27,18 +27,34 @@ define([
                 constructor: function( args )
                 {
                     console.log( "BEYONDGBrowse is starting" );
+                    console.info('高通量多组学序列数据可视化浏览器 v1.0\nadmin@xuefeng.space\n指导老师: 钟坚成');
                     let browser = args.browser;
                     let _this = this;
                     _this.browser = browser;
                     browser.config.massSpectraTrackNum =
-                        browser.config.massSpectraTrackNum ? browser.config.massSpectraTrackNum : 0;
+                        browser.config.massSpectraTrackNum || 0;
                     browser.config.BEYONDGBrowseDatasetId =
                         browser.config.BEYONDGBrowseDatasetId || 1;
+
+                    window.SNOW_DEBUG = browser.config.debugMode;
+                    window.SnowConsole = {
+                        log: function () {
+                            window.SNOW_DEBUG && console.log.apply(this, arguments);
+                        },
+                        info: function () {
+                            window.SNOW_DEBUG && console.info.apply(this, arguments);
+                        },
+                        // error: function () {
+                        //     window.SNOW_DEBUG && console.error.apply(this, arguments);
+                        // },
+                        debug: function () {
+                            window.SNOW_DEBUG && console.debug.apply(this, arguments);
+                        }
+                    };
+
                     let locateButtonDomNode = this._generateLocateButton();
                     _this._loadBeyondProteinTrackFromConfig();
                     _this._subscribeShowMassSpectraTrackEvent();
-
-                    console.info('高通量多组学序列数据可视化浏览器 v1.0\nadmin@xuefeng.space\n指导老师: 钟坚成');
 
                     browser.afterMilestone(
                         'loadConfig',
@@ -46,8 +62,11 @@ define([
                             let queryParam = window.location.search;
                             let datasetRegExp = /([?&])BEYONDGBrowseDataset=(.*?)(&|$)/i;
                             let extractResult = datasetRegExp.exec(queryParam);
-                            let BEYONDGBrowseDatasetId = parseInt(extractResult[2]);
-                            browser.config.BEYONDGBrowseDatasetId = BEYONDGBrowseDatasetId;
+                            if(extractResult && extractResult[2] && !isNaN(extractResult[2]))
+                            {
+                                let BEYONDGBrowseDatasetId = parseInt(extractResult[2]);
+                                browser.config.BEYONDGBrowseDatasetId = BEYONDGBrowseDatasetId;
+                            }
                         }
                     );
 
@@ -112,6 +131,22 @@ define([
                                     }
                                 }
                             );
+                        }
+                    );
+
+                    _this.browser.subscribe(
+                        '/jbrowse/v1/n/tracks/visibleChanged',
+                        function (currentVisibleTracksName) {
+                            let currentVisibleMsSpectraTracks = 0;
+                            _this.browser.view.tracks.forEach(
+                                function(item) {
+                                    if(item.config.BEYONDGBrowseMassTrack === true)
+                                    {
+                                        currentVisibleMsSpectraTracks++;
+                                    }
+                                }
+                            );
+                            window.BEYONDGBrowse.currentVisibleMsSpectraTrackNum = currentVisibleMsSpectraTracks;
                         }
                     );
 
@@ -180,7 +215,13 @@ define([
                     let browserTrackConfig = _this.browser.config.tracks;
                     window.BEYONDGBrowseProteinTrack = _this.BEYONDGBrowseProteinTrack = undefined;
                     window.BEYONDGBrowse = {
-                        mSScanMassResultArray: []
+                        msScanDataInfoStore: [],  // {lcsLengthArray, selectedRefSeqIndex, diffFromRefSequenceResult, massAndIntensityMappingResult, detailArrayOfProteoformSequence} of each ScanId
+                        annotationStore: [],
+                        currentVisibleMsSpectraTrackNum: 0
+                        // Following are deprecated
+                        // mSScanMassResultArray: [],
+                        // diffFromRefSequenceResult: [],
+                        // requestedProteoformObjectArray: []
                     };
 
                     for(let index in browserTrackConfig)
@@ -237,7 +278,7 @@ define([
                         {
                             browser: browserObject,
                             setCallback: function (proteinName) {
-                                console.info('proteinName:', proteinName);
+                                SnowConsole.info('proteinName:', proteinName);
                                 if(proteinName.length === 0)
                                 {
                                     return;
@@ -258,7 +299,7 @@ define([
                         {
                             browser: browserObject,
                             setCallback: function (massTrackNumber) {
-                                console.info('massTrackNumber:', massTrackNumber);
+                                SnowConsole.info('massTrackNumber:', massTrackNumber);
                                 if(isNaN(massTrackNumber) || massTrackNumber < 0 || massTrackNumber > 100)
                                 {
                                     return;
@@ -312,14 +353,14 @@ define([
                                     }
                                 }
                             );
-                            console.info('datasetsList:', datasetsList);
+                            SnowConsole.info('datasetsList:', datasetsList);
 
                             let datasetSelectDialog = new SnowDatasetSelectDialog(
                                 {
                                     browser: browserObject,
                                     datasetListInDatabase: datasetsList,
                                     setCallback: function (selectedDatasetId) {
-                                        console.info('selectedDatasetId:', selectedDatasetId);
+                                        SnowConsole.info('selectedDatasetId:', selectedDatasetId);
                                         if(isNaN(selectedDatasetId) || selectedDatasetId < 1 || selectedDatasetId > 100)
                                         {
                                             return;
@@ -332,7 +373,7 @@ define([
                                                 'BEYONDGBrowseDataset',
                                                 selectedDatasetId
                                             );
-                                        console.info(window.location.search, newQueryParam);
+                                        SnowConsole.info(window.location.search, newQueryParam);
                                         window.location.search = newQueryParam;
                                     }
                                 }
@@ -362,7 +403,7 @@ define([
                         }
                     ).then(
                         function (proteinData) {
-                            console.info(proteinData);
+                            SnowConsole.info(proteinData);
                             finishCallback(proteinData);
                         }
                     );

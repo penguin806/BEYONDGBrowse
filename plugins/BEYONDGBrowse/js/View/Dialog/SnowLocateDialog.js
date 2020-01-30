@@ -8,7 +8,8 @@ define(
         'dijit/form/TextBox',
         'JBrowse/View/Dialog/WithActionBar',
         'dojo/on',
-        'dijit/form/Button',
+        'dojo/request',
+        'dijit/form/Button'
     ],
     function(
         declare,
@@ -18,7 +19,8 @@ define(
         focus,
         dijitTextBox,
         ActionBarDialog,
-        on,
+        dojoOn,
+        dojoRequest,
         Button
     ){
         return declare(
@@ -78,11 +80,66 @@ define(
                         }
                     );
 
+                    _this.proteinNameAutoCompleteBox = domConstruct.create(
+                        'select',
+                        {
+                            size: 10,
+                            style: {
+                                display: 'block',
+                                width: '70%',
+                                left: '30%',
+                                position: 'relative',
+                                margin: '3px 0'
+                            },
+                            onchange: function () {
+                                _this.proteinNameInput.set(
+                                    'value',
+                                    this.options[this.selectedIndex].innerHTML
+                                );
+                            }
+                        }
+                    );
+
+                    dojoOn(_this.proteinNameInput, 'keyup',
+                        function (args) {
+                            let currentTextBoxValue = _this.proteinNameInput.get("value");
+                            if(!currentTextBoxValue || currentTextBoxValue === "")
+                            {
+                                return;
+                            }
+                            dojoRequest(
+                                'http://' + (window.JBrowse.config.BEYONDGBrowseBackendAddr || '127.0.0.1') + ':12080'
+                                + '/' + _this.browser.config.BEYONDGBrowseDatasetId + '/locate_autocomplete/' + currentTextBoxValue,
+                                {
+                                    method: 'GET',
+                                    headers: {
+                                        'X-Requested-With': null
+                                        //'User-Agent': 'SnowPlugin-FrontEnd'
+                                    },
+                                    handleAs: 'json'
+                                }
+                            ).then(
+                                function (proteinUniprotIdList) {
+                                    SnowConsole.info(proteinUniprotIdList);
+                                    _this.proteinNameAutoCompleteBox.innerHTML = null;
+                                    proteinUniprotIdList.forEach(
+                                        function (item, index) {
+                                            let option = document.createElement('option');
+                                            option.innerText = item;
+                                            _this.proteinNameAutoCompleteBox.append(option);
+                                        }
+                                    );
+                                }
+                            );
+                        }
+                    );
+
                     _this.set(
                         'content',
                         [
                             domConstruct.create('label', { "for": 'protein_name_string', innerHTML: 'Protein Name ' } ),
-                            this.proteinNameInput.domNode
+                            this.proteinNameInput.domNode,
+                            _this.proteinNameAutoCompleteBox
                         ]
                     );
 

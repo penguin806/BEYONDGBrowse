@@ -8,6 +8,7 @@ define(
         'dojo/Deferred',
         'dojo/topic',
         'JBrowse/View/Track/CanvasFeatures',
+        'JBrowse/View/Track/BlockBased',
         'JBrowse/View/TrackConfigEditor',
         'JBrowse/View/ConfirmDialog',
         'JBrowse/Util',
@@ -23,6 +24,7 @@ define(
         dojoDeferred,
         dojoTopic,
         CanvasFeatures,
+        BlockBased,
         TrackConfigEditor,
         ConfirmDialog,
         Util,
@@ -33,6 +35,7 @@ define(
         return declare(
             [
                 CanvasFeatures,
+                BlockBased,
                 CodonTable,
                 SnowHistogramTrack
             ],
@@ -42,6 +45,12 @@ define(
                     let _this = this;
                     _this._codonTable = this._codonTable ? this._codonTable : this.defaultCodonTable;
                     _this.originalLabelText = _this.config.label || "";
+                    _this.msScanDataCache = {
+                        refName: undefined,
+                        _start: undefined,
+                        end: undefined,
+                        data: undefined
+                    };
                     // _this.browser.subscribe(
                     //     '/jbrowse/v1/n/tracks/visibleChanged',
                     //     function () {
@@ -64,6 +73,12 @@ define(
                             showMzValue: true,
                             alignByIonPosition: true
                         });
+
+                    newConfig.PTMColor = window.JBrowse.config.PTMColor || {
+                        'Acetyl': 'red',
+                        'Methyl': 'blue',
+                        'default': 'black'
+                    };
 
                     return newConfig;
                 },
@@ -169,97 +184,57 @@ define(
                     return matrix[str1Length - 1][str2Length - 1];
                 },
 
-                _translateGenomeSequenceToProtein: function(sequence, isReverse)
+                _translateGenomeSequenceToProtein: function(refSequence, fullRangeLeftPos, fullRangeRightPos)
                 {
+                    let blockSeq = refSequence.substring( 2, refSequence.length - 2 );
+                    let blockLength = blockSeq.length;
+
+                    let leftOver = (refSequence.length - 2) % 3;
+                    let extStartSeq = refSequence.substring( 0, refSequence.length - 2 );
+                    let extEndSeq = refSequence.substring( 2 );
+
+
                     let sixTranslatedSeqs = [];
 
                     for(let offset = 0; offset < 3; offset++)
                     {
-                        let extraBases = (sequence.length - offset) % 3;
-                        let slicedSequence = sequence.slice(offset, sequence.length - extraBases);
+                        let transStart = fullRangeLeftPos + offset;
+                        let frame = (transStart % 3 + 3) % 3;
+
+                        let extraBases = (extEndSeq.length - offset) % 3;
+                        let slicedSequence = extEndSeq.slice(offset, extEndSeq.length - extraBases);
                         let translatedSeq = "";
-                        for(let i=0; i<slicedSequence.length; i+=3)
+                        for(let i = 0; i < slicedSequence.length; i += 3)
                         {
                             let theCodon = slicedSequence.slice(i, i + 3);
                             let aminoAcid = this._codonTable[theCodon] || '#';
                             translatedSeq += aminoAcid;
                         }
 
-                        sixTranslatedSeqs[offset] = translatedSeq;
+                        sixTranslatedSeqs[frame] = translatedSeq;
                     }
 
-                    for(let offset = 3; offset < 6; offset++)
+                    for(let offset = 0; offset < 3; offset++)
                     {
-                        sequence = Util.revcom(sequence);
-                        let extraBases = (sequence.length - offset) % 3;
-                        let slicedSequence = sequence.slice(offset, sequence.length - extraBases);
+                        let transStart = fullRangeLeftPos + 1 - offset;
+                        let frame = (transStart % 3 + 3 + leftOver) % 3;
+
+                        extStartSeq = Util.revcom(extStartSeq);
+                        let extraBases = (extStartSeq.length - offset) % 3;
+                        let slicedSequence = extStartSeq.slice(offset, refSequence.length - extraBases);
                         let translatedSeq = "";
-                        for(let i=0; i<slicedSequence.length; i+=3)
+                        for(let i=0; i < slicedSequence.length; i+=3)
                         {
                             let theCodon = slicedSequence.slice(i, i + 3);
-                            let aminoAcid = this._codonTable[theCodon] || '#';
+                            let aminoAcid = this._codonTable[theCodon] || ''  /*'#'*/;
                             translatedSeq += aminoAcid;
                         }
 
                         translatedSeq = translatedSeq.split("").reverse().join("");
-                        sixTranslatedSeqs[offset] = translatedSeq;
+                        sixTranslatedSeqs[3 + 2 - frame] = translatedSeq;
                     }
 
                     return sixTranslatedSeqs;
-                },
-
-                _parseRequestedObject: function(recordObjectArray)
-                {
-                    if(recordObjectArray === undefined)
-                        return;
-                    for(let i=0; i<recordObjectArray.length; i++)
-                    {
-                        if(recordObjectArray[i].hasOwnProperty('_start'))
-                        {
-                            recordObjectArray[i]._start = parseInt(recordObjectArray[i]._start);
-                        }
-                        if(recordObjectArray[i].hasOwnProperty('end'))
-                        {
-                            recordObjectArray[i].end = parseInt(recordObjectArray[i].end);
-                        }
-                        if(recordObjectArray[i].hasOwnProperty('arrMSScanMassArray'))
-                        {
-                            for(let property in recordObjectArray[i].arrMSScanMassArray)
-                            {
-                                recordObjectArray[i].arrMSScanMassArray[property] =
-                                    parseFloat(recordObjectArray[i].arrMSScanMassArray[property]);
-                            }
-                        }
-                        if(recordObjectArray[i].hasOwnProperty('arrMSScanPeakAundance'))
-                        {
-                            for(let property in recordObjectArray[i].arrMSScanPeakAundance)
-                            {
-                                recordObjectArray[i].arrMSScanPeakAundance[property] =
-                                    parseFloat(recordObjectArray[i].arrMSScanPeakAundance[property]);
-                            }
-                        }
-                    }
-
-                    return recordObjectArray;
-                },
-
-                _queryFeatures: function(refName, startPos, endPos)
-                {
-                    let _this = this;
-                    let requestPromise = dojoRequest(
-                        'http://' + (window.JBrowse.config.BEYONDGBrowseBackendAddr || '127.0.0.1') + ':12080'
-                        + '/' + _this.browser.config.BEYONDGBrowseDatasetId + '/ref/' + refName + '/' +
-                        startPos + '..' + endPos,
-                        {
-                            method: 'GET',
-                            headers: {
-                                'X-Requested-With': null
-                                //'User-Agent': 'SnowPlugin-FrontEnd'
-                            },
-                            handleAs: 'json'
-                        }
-                    );
-                    return requestPromise;
                 },
 
                 _sortArrMSScanMassAndArrMSScanPeakAundance: function(arrMSScanMass, arrMSScanPeakAundance)
@@ -322,9 +297,9 @@ define(
                         {
                             list.push(
                                 {
-                                    OriginalIndex: i,
-                                    MSScanMz: arrMSScanMass[i],
-                                    MSScanMass: arrMSScanMass[i] * arrIonsNum[i],
+                                    // OriginalIndex: i,
+                                    MSScanMz: arrMSScanMass[i] / arrIonsNum[i],
+                                    MSScanMass: arrMSScanMass[i],
                                     MSScanPeakAundance: arrMSScanPeakAundance[i],
                                     IonsNum: arrIonsNum[i]
                                 }
@@ -477,7 +452,7 @@ define(
 
                     let boolPTM=false;
                     let strPTM="";
-                    let dSpanThreshold=10.0;
+                    let dSpanThreshold=5.0;
 
 
 
@@ -599,8 +574,8 @@ define(
                         }
                     }
 
-                    console.log(arrBIonPosition);
-                    console.log(arrBIonNUM);
+                    SnowConsole.log(arrBIonPosition);
+                    SnowConsole.log(arrBIonNUM);
 
 
                     let bIonsResultObjectArray = [];
@@ -637,18 +612,18 @@ define(
 
 
                     intCurrentPos = 0;
-
                     iCurrentReverseSeqPositionWithoutPTM=0;
+                    dCurrentMassSUM = dyIons;// y ions initial value
 
                     for (let i = strSenquence.length-1; i > 0; i--) {
                         //reservse POSITION FOR Y IONS
 
-                        let dYCurrentMass=mapACIDMass.get(strSenquence[i]);
+                        let dYCurrentMass = mapACIDMass.get(strSenquence[i]);
                         //console.log(i,dCurrentMass)
 
                         if(dYCurrentMass!==undefined && boolPTM===false)
                         {
-                            if (i===strSenquence.length-1) dCurrentMassSUM = dyIons;// y ions initial value
+                            // if (i===strSenquence.length-1) dCurrentMassSUM = dyIons;// y ions initial value
 
                             dCurrentMassSUM += dYCurrentMass;
                             iCurrentReverseSeqPositionWithoutPTM++;
@@ -662,7 +637,7 @@ define(
                             if (strSenquence[i]==="(") continue;//filter out special char
                             if (strSenquence[i]===")") continue;//filter out special char
 
-                            if (strSenquence[i]==="]")//PTM is begining
+                            if (strSenquence[i]==="]")//PTM is beginning
                             {
                                 boolPTM=true;
                                 continue;
@@ -670,14 +645,14 @@ define(
                             else if(strSenquence[i]==="[")//add last PTM mass
                             {
                                 boolPTM=false;
-                                strPTM = reverseString(strPTM); //reservse the string
+                                strPTM = reverseString(strPTM); //reverse the string
 
                                 let dCurrentMass=mapACIDMass.get(strPTM);
                                 //console.log("]",strPTM,dCurrentMass)
 
                                 if(!isNaN(dCurrentMass))
                                     dCurrentMassSUM += dCurrentMass;
-                                //                               console.log(strPTM,dCurrentMass," sum:",dCurrentMassSUM);
+                                // console.log(strPTM,dCurrentMass," sum:",dCurrentMassSUM);
                                 RecongnazieTheBIonPosition(false,iCurrentReverseSeqPositionWithoutPTM);
 
                                 strPTM="";//set PTM is nothing
@@ -706,8 +681,8 @@ define(
 
                     }
 
-                    console.log(arrYIonPosition);
-                    console.log(arrYIonNUM);
+                    SnowConsole.log(arrYIonPosition);
+                    SnowConsole.log(arrYIonNUM);
 
 
 
@@ -828,7 +803,7 @@ define(
                             //收敛到一点，向后探索
 
                             let doubleCheckMassDistance = arrMSScanMass[j] - dCurrentMassSUM;
-                            console.log("sum:",dCurrentMassSUM,"POS:",j," mass:",arrMSScanMass[j]," span:",doubleCheckMassDistance);
+                            SnowConsole.log("sum:",dCurrentMassSUM,"POS:",j," mass:",arrMSScanMass[j]," span:",doubleCheckMassDistance);
 
                             if (doubleCheckMassDistance > dSpan)
                                 if(dSpan===dSpanThreshold)//质量间隔非常远
@@ -865,7 +840,7 @@ define(
                             dCurrentMassSUM += dCurrentMass;
                             iCurrentSeqPositionWithoutPTM++;
 
-                            console.log(iCurrentSeqPositionWithoutPTM," ",strSenquence[i],dCurrentMass," sum:",dCurrentMassSUM)
+                            SnowConsole.log(iCurrentSeqPositionWithoutPTM," ",strSenquence[i],dCurrentMass," sum:",dCurrentMassSUM)
 
                             RecongnazieTheBIonPosition();
 
@@ -887,7 +862,7 @@ define(
 
                                 if(!isNaN(dCurrentMass))
                                     dCurrentMassSUM += dCurrentMass;
-                                console.log(strPTM,dCurrentMass," sum:",dCurrentMassSUM);
+                                SnowConsole.log(strPTM,dCurrentMass," sum:",dCurrentMassSUM);
                                 RecongnazieTheBIonPosition();
 
                                 strPTM="";//set PTM is nothing
@@ -900,7 +875,7 @@ define(
                                 //console.log(";",strPTM,dCurrentMass)
                                 if(!isNaN(dCurrentMass))
                                     dCurrentMassSUM += dCurrentMass;
-                                console.log(strPTM,dCurrentMass," sum:",dCurrentMassSUM);
+                                SnowConsole.log(strPTM,dCurrentMass," sum:",dCurrentMassSUM);
 
                                 RecongnazieTheBIonPosition();
 
@@ -931,8 +906,8 @@ define(
                             }
                         }
 
-                        console.log(arrBIonPosition);
-                        console.log(arrBIonNUM);
+                        SnowConsole.log(arrBIonPosition);
+                        SnowConsole.log(arrBIonNUM);
 
                         let arrBionPositionAndNumObject = [];
                         for(let i=0; i<arrBIonPosition.length && i<arrBIonNUM.length; i++)
@@ -966,8 +941,7 @@ define(
                 },
 
                 _filterMSScanMassMappingResultForCurrentBlock: function(
-                    blockLeftBase, blockRightBase, mappingResultObjectArray,
-                    proteoformSequence, proteoformStartPosition, proteoformEndPosition
+                    blockLeftBase, blockRightBase, mappingResultObjectArray, proteoformStartPosition
                 )
                 {
                     // let proteoformSequenceLengthWithoutModification = proteoformSequence.replace(/\[\w*\]|\(|\)|\./g,'').length;
@@ -998,44 +972,14 @@ define(
                 _publishDrawProteoformSequenceEvent: function(
                     proteoformSequence, proteoformStartPosition, proteoformEndPosition,
                     isReverseStrand, scanId, mSScanMassMappingResultArray, msScanMassTrackId,
-                    translatedRefSequenceForProteoform, selectedRefSeqIndex
+                    selectedRefSeqIndex, diffFromRefSequenceResult
                 )
                 {
                     dojoTopic.publish('BEYONDGBrowse/addSingleProteoformScan',
                         proteoformSequence, proteoformStartPosition, proteoformEndPosition,
                         isReverseStrand, scanId, mSScanMassMappingResultArray, msScanMassTrackId,
-                        translatedRefSequenceForProteoform, selectedRefSeqIndex
+                        selectedRefSeqIndex, diffFromRefSequenceResult
                     );
-                },
-
-                _formatProteoformSequenceString: function(
-                    proteoformSequence, isReverse
-                )
-                {
-                    let proteoformSequenceWithoutPrefixAndSuffix =
-                        proteoformSequence.replace(/(.*\.)(.*)(\..*)/, '$2');
-                    let proteoformSequenceWithoutParentheses =
-                        proteoformSequenceWithoutPrefixAndSuffix.replace(/\(|\)/g, '');
-                    // Example:
-                    // A.TKAARKSAPATGGVKKPHRYRPGTVALREIRRYQKST(ELLIRKLPFQRLVREIAQDFKTDLRFQSSAV)[Acetyl]MALQEASEAYLVGLFEDTNLCAIHAKRVTIMPKDIQLARRIRGERA.
-                    // -> TKAARKSAPATGGVKKPHRYRPGTVALREIRRYQKSTELLIRKLPFQRLVREIAQDFKTDLRFQSSAV[Acetyl]MALQEASEAYLVGLFEDTNLCAIHAKRVTIMPKDIQLARRIRGERA
-
-                    if(isReverse)
-                    {
-                        return proteoformSequenceWithoutParentheses.replace(
-                                /\[.*?\]/g,
-                                function(modification)
-                                {
-                                    return modification.split('').reverse().join('')
-                                }
-                            ).split('').reverse().join('');
-                        // -> AREGRIRRALQIDKPMITVRKAHIACLNTDEFLGVLYAESAEQLAM[Acetyl]VASSQFRLDTKFDQAIERVLRQFPLKRILLETSKQYRRIERLAVTGPRYRHPKKVGGTAPASKRAAKT
-                    }
-                    else
-                    {
-                        return proteoformSequenceWithoutParentheses;
-                    }
-
                 },
 
                 // showRange: function(
@@ -1058,8 +1002,528 @@ define(
                 //         ]
                 //     );
                 // },
+                _formatProteoformSequenceString: function(
+                    proteoformSequence, isReverse
+                )
+                {
+                    let proteoformSequenceWithoutPrefixAndSuffix =
+                        proteoformSequence.replace(/(.*\.)(.*)(\..*)/, '$2');
+                    let proteoformSequenceWithoutParentheses =
+                        proteoformSequenceWithoutPrefixAndSuffix.replace(/\(|\)/g, '');
+                    // Example:
+                    // A.TKAARKSAPATGGVKKPHRYRPGTVALREIRRYQKST(ELLIRKLPFQRLVREIAQDFKTDLRFQSSAV)[Acetyl]MALQEASEAYLVGLFEDTNLCAIHAKRVTIMPKDIQLARRIRGERA.
+                    // -> TKAARKSAPATGGVKKPHRYRPGTVALREIRRYQKSTELLIRKLPFQRLVREIAQDFKTDLRFQSSAV[Acetyl]MALQEASEAYLVGLFEDTNLCAIHAKRVTIMPKDIQLARRIRGERA
 
-                fillBlock: function(renderArgs)
+                    if(isReverse)
+                    {
+                        return proteoformSequenceWithoutParentheses.replace(
+                            /\[.*?\]/g,
+                            function(modification)
+                            {
+                                return modification.split('').reverse().join('')
+                            }
+                        ).split('').reverse().join('');
+                        // -> AREGRIRRALQIDKPMITVRKAHIACLNTDEFLGVLYAESAEQLAM[Acetyl]VASSQFRLDTKFDQAIERVLRQFPLKRILLETSKQYRRIERLAVTGPRYRHPKKVGGTAPASKRAAKT
+                    }
+                    else
+                    {
+                        return proteoformSequenceWithoutParentheses;
+                    }
+
+                },
+
+                _parseRequestedObject: function(recordObjectArray)
+                {
+                    if(recordObjectArray === undefined)
+                        return;
+                    for(let i = 0; i < recordObjectArray.length; i++)
+                    {
+                        if(recordObjectArray[i].hasOwnProperty('_start'))
+                        {
+                            recordObjectArray[i]._start = parseInt(recordObjectArray[i]._start);
+                        }
+                        if(recordObjectArray[i].hasOwnProperty('end'))
+                        {
+                            recordObjectArray[i].end = parseInt(recordObjectArray[i].end);
+                        }
+                        if(recordObjectArray[i].hasOwnProperty('arrMSScanMassArray'))
+                        {
+                            for(let property in recordObjectArray[i].arrMSScanMassArray)
+                            {
+                                recordObjectArray[i].arrMSScanMassArray[property] =
+                                    parseFloat(recordObjectArray[i].arrMSScanMassArray[property]);
+                            }
+                        }
+                        if(recordObjectArray[i].hasOwnProperty('arrMSScanPeakAundance'))
+                        {
+                            for(let property in recordObjectArray[i].arrMSScanPeakAundance)
+                            {
+                                recordObjectArray[i].arrMSScanPeakAundance[property] =
+                                    parseFloat(recordObjectArray[i].arrMSScanPeakAundance[property]);
+                            }
+                        }
+                    }
+
+                    return recordObjectArray;
+                },
+
+                _queryMsScanDataFromBackend: function(refName, startPos, endPos, finishCallback)
+                {
+                    let _this = this;
+                    let requestPromise = dojoRequest(
+                        'http://' + (window.JBrowse.config.BEYONDGBrowseBackendAddr || '127.0.0.1') + ':12080'
+                        + '/' + _this.browser.config.BEYONDGBrowseDatasetId + '/ref/' + refName + '/' +
+                        startPos + '..' + endPos,
+                        {
+                            method: 'GET',
+                            headers: {
+                                'X-Requested-With': null
+                                //'User-Agent': 'SnowPlugin-FrontEnd'
+                            },
+                            handleAs: 'json'
+                        }
+                    );
+
+                    requestPromise.then(
+                        function (data) {
+                            let parsedData = _this._parseRequestedObject(data);
+
+                            if(finishCallback)
+                            {
+                                finishCallback(parsedData);
+                            }
+                        },
+                        function (error) {
+                            console.error('_queryMsScanDataFromBackend', error);
+                        }
+                    );
+
+                },
+
+                showRange: function(first, last, startBase, bpPerBlock, scale,
+                                    containerStart, containerEnd, finishCallback) {
+                    let _this = this;
+                    let _arguments = arguments;
+                    let currentRangeLeftBase = startBase;
+                    let currentRangeRightBase = startBase + (last - first + 1) * bpPerBlock;
+
+                    if(
+                        _this.msScanDataCache._start && _this.msScanDataCache.end &&
+                        typeof _this.msScanDataCache.data == "object" &&
+                        currentRangeLeftBase >= _this.msScanDataCache._start &&
+                        currentRangeRightBase <= _this.msScanDataCache.end &&
+                        _this.refSeq.name === _this.msScanDataCache.refName
+                    )
+                    {
+                        _this._publishDrawProteoformSequenceEvent(
+                            _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].sequence,
+                            _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1]._start,
+                            _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].end,
+                            _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].strand === '-',
+                            _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].scanId,
+                            window.BEYONDGBrowse.msScanDataInfoStore[_this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].scanId].massAndIntensityMappingResult,
+                            _this.config.msScanMassTrackId,
+                            _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].selectedRefSeqIndex,
+                            window.BEYONDGBrowse.msScanDataInfoStore[_this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].scanId].diffFromRefSequenceResult
+                        );
+                        _this.inherited(_arguments);
+                        return;
+                    }
+
+                    _this._queryMsScanDataFromBackend(
+                        _this.refSeq.name,
+                        currentRangeLeftBase,
+                        currentRangeRightBase,
+                        function (msScanData) {
+                            if(!msScanData || typeof msScanData != "object" || msScanData.length === 0)
+                            {
+                                SnowConsole.info(
+                                    '_queryMsScanDataFromBackend_No_Data',
+                                    _this.refSeq.name,
+                                    currentRangeLeftBase,
+                                    currentRangeRightBase
+                                );
+                                return;
+                            }
+
+                            // Attention: Only a single Uniprot_Id is handled here
+                            SnowConsole.info('_queryMsScanDataFromBackend_Uniprot_Id', msScanData[0].uniprot_id);
+                            if(
+                                _this.msScanDataCache._start && _this.msScanDataCache.end &&
+                                msScanData[0]._start === _this.msScanDataCache._start &&
+                                msScanData[0].end === _this.msScanDataCache.end &&
+                                _this.msScanDataCache.data &&
+                                msScanData.length === _this.msScanDataCache.data.length
+                            )
+                            {
+                                _this._publishDrawProteoformSequenceEvent(
+                                    _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].sequence,
+                                    _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1]._start,
+                                    _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].end,
+                                    _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].strand === '-',
+                                    _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].scanId,
+                                    window.BEYONDGBrowse.msScanDataInfoStore[_this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].scanId].massAndIntensityMappingResult,
+                                    _this.config.msScanMassTrackId,
+                                    _this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].selectedRefSeqIndex,
+                                    window.BEYONDGBrowse.msScanDataInfoStore[_this.msScanDataCache.data[_this.config.msScanMassTrackId - 1].scanId].diffFromRefSequenceResult
+                                );
+                                _this.inherited(_arguments);
+                                return;
+                            }
+
+                            let proteinLeftPos = parseInt(msScanData[0]._start);
+                            let proteinRightPos = parseInt(msScanData[0].end);
+                            let proteinLeftPosExtended = proteinLeftPos - 2;
+                            let proteinRightPosExtended = proteinRightPos + 2;
+
+                            _this.store.getReferenceSequence(
+                                {
+                                    ref: _this.refSeq.name,
+                                    start: proteinLeftPosExtended - 1,
+                                    end: proteinRightPosExtended + 3 - ((proteinRightPosExtended - proteinLeftPosExtended) % 3)
+                                },
+                                function(refGenomeSequenceForProteoform)
+                                {
+                                    let translatedRefSeqsArrayForProteoform =
+                                        _this._translateGenomeSequenceToProtein(refGenomeSequenceForProteoform, proteinLeftPos - 1, proteinRightPos);
+                                    SnowConsole.info(
+                                        'translatedRefSeqsArrayForProteoform',
+                                        proteinLeftPos - 1,
+                                        proteinRightPos,
+                                        translatedRefSeqsArrayForProteoform
+                                    );
+
+                                    if(translatedRefSeqsArrayForProteoform.length !== 6 || msScanData.length === 0)
+                                    {
+                                        return;
+                                    }
+
+                                    for(let i = 0; i < msScanData.length; i++)
+                                    {
+                                        if(
+                                            window.BEYONDGBrowse.msScanDataInfoStore.hasOwnProperty(
+                                                msScanData[i].scanId
+                                            )
+                                        )
+                                        {
+                                            msScanData[i].lcsLengthArray = window.BEYONDGBrowse.msScanDataInfoStore[msScanData[i].scanId].lcsLengthArray;
+                                            msScanData[i].selectedRefSeqIndex = window.BEYONDGBrowse.msScanDataInfoStore[msScanData[i].scanId].selectedRefSeqIndex;
+                                        }
+                                        else
+                                        {
+                                            const proteoformWithoutModificationToCompare =
+                                                _this._formatProteoformSequenceString(
+                                                    msScanData[i].sequence,
+                                                    msScanData[i].strand === '-'
+                                                ).replace(/\[.*?]|\(|\)|\./g, '');
+
+                                            if(msScanData[i].strand === '-')
+                                            {
+                                                msScanData[i].arrMSScanMassArray = msScanData[i].arrMSScanMassArray.reverse();
+                                                msScanData[i].arrMSScanPeakAundance = msScanData[i].arrMSScanPeakAundance.reverse();
+                                                msScanData[i].arrIonsNum = msScanData[i].arrIonsNum.reverse();
+                                            }
+
+                                            let lcsMatrix = [];
+                                            msScanData[i].lcsLengthArray = [];
+                                            for(let indexJ = 0; indexJ < 3; indexJ++)
+                                            {
+                                                let translatedRefSeqForProteoformToCompare = msScanData[i].strand === '-' ?
+                                                    translatedRefSeqsArrayForProteoform[3 + indexJ] :
+                                                    translatedRefSeqsArrayForProteoform[indexJ];
+
+
+                                                lcsMatrix.push(
+                                                    _this._getLongestCommonSubSequenceMatrix(
+                                                        translatedRefSeqForProteoformToCompare,
+                                                        proteoformWithoutModificationToCompare
+                                                    )
+                                                );
+
+                                                msScanData[i].lcsLengthArray.push(
+                                                    _this._getLcsMatrixLength(
+                                                        translatedRefSeqForProteoformToCompare,
+                                                        proteoformWithoutModificationToCompare,
+                                                        lcsMatrix[indexJ]
+                                                    )
+                                                );
+                                            }
+
+                                            msScanData[i].selectedRefSeqIndex = 0;
+                                            for(let indexK = 1; indexK < msScanData[i].lcsLengthArray.length; indexK++)
+                                            {
+                                                if(
+                                                    msScanData[i].lcsLengthArray[indexK] > msScanData[i].lcsLengthArray[
+                                                        msScanData[i].selectedRefSeqIndex
+                                                    ]
+                                                )
+                                                {
+                                                    msScanData[i].selectedRefSeqIndex = indexK;
+                                                }
+                                            }
+
+                                            window.BEYONDGBrowse.msScanDataInfoStore[msScanData[i].scanId] =
+                                                window.BEYONDGBrowse.msScanDataInfoStore[msScanData[i].scanId] || { };
+                                            window.BEYONDGBrowse.msScanDataInfoStore[msScanData[i].scanId].lcsLengthArray =
+                                                msScanData[i].lcsLengthArray;
+                                            window.BEYONDGBrowse.msScanDataInfoStore[msScanData[i].scanId].selectedRefSeqIndex =
+                                                msScanData[i].selectedRefSeqIndex;
+                                        }
+                                    }
+
+                                    msScanData.sort(
+                                        (itemA, itemB) =>
+                                            itemB.lcsLengthArray[itemB.selectedRefSeqIndex] -
+                                            itemA.lcsLengthArray[itemA.selectedRefSeqIndex]
+                                    );
+                                    _this.msScanDataCache.refName = _this.refSeq.name;
+                                    _this.msScanDataCache._start = msScanData[0]._start;
+                                    _this.msScanDataCache.end = msScanData[0].end;
+                                    _this.msScanDataCache.data = msScanData;
+
+                                    if(msScanData.length >= 1)
+                                    {
+                                        // Read configuration file, determine which rank of scan to take
+                                        let thisMsScanTrackId = _this.config.msScanMassTrackId;
+                                        if(
+                                            thisMsScanTrackId === undefined || isNaN(thisMsScanTrackId) ||
+                                            thisMsScanTrackId < 1 || thisMsScanTrackId > msScanData.length
+                                        )
+                                        {
+                                            thisMsScanTrackId = 1;
+                                        }
+
+                                        let thisProteoformObject = msScanData[thisMsScanTrackId - 1];
+                                        if(_this.config.DEBUG_SCANID && !isNaN(_this.config.DEBUG_SCANID))
+                                        {
+                                            let targetObject = msScanData.find(
+                                                function (item) {
+                                                    return item.scanId === _this.config.DEBUG_SCANID;
+                                                }
+                                            );
+                                            if(targetObject)
+                                            {
+                                                thisProteoformObject = targetObject;
+                                            }
+                                        }
+
+                                        _this.scanId = thisProteoformObject.scanId;
+                                        _this.proteoformStartPosition = thisProteoformObject._start;
+                                        let thisProteoformStartPosition = thisProteoformObject._start;
+                                        let thisProteoformEndPosition = thisProteoformObject.end;
+                                        // let proteoformPositionOffset = 3 + Math.abs((thisProteoformStartPosition - leftBase) % 3);
+                                        // thisProteoformStartPosition += proteoformPositionOffset;
+                                        // thisProteoformEndPosition += proteoformPositionOffset;
+                                        let isThisProteoformReverse = thisProteoformObject.strand === '-';
+                                        SnowConsole.info('msScanMassTrackId:', thisMsScanTrackId);
+                                        SnowConsole.info('thisProteoformObject:', thisProteoformObject);
+
+                                        // Update track label
+                                        let labelTextToAppend = ' (Scan: ' + thisProteoformObject.scanId + ')';
+                                        if(_this.originalLabelText + labelTextToAppend !== _this.labelHTML)
+                                        {
+                                            _this.setLabel(_this.originalLabelText + labelTextToAppend);
+                                        }
+
+                                        let diffFromRefSequenceResult = undefined;
+                                        if(
+                                            window.BEYONDGBrowse.msScanDataInfoStore.hasOwnProperty(thisProteoformObject.scanId)
+                                            && typeof window.BEYONDGBrowse.msScanDataInfoStore[thisProteoformObject.scanId].diffFromRefSequenceResult == "object"
+                                        )
+                                        {
+                                            diffFromRefSequenceResult = window.BEYONDGBrowse.msScanDataInfoStore[thisProteoformObject.scanId].diffFromRefSequenceResult;
+                                        }
+                                        else
+                                        {
+                                            let translatedRefSequenceForDiffCompare = isThisProteoformReverse ? translatedRefSeqsArrayForProteoform[
+                                                    3 + thisProteoformObject.selectedRefSeqIndex
+                                                ] : translatedRefSeqsArrayForProteoform[thisProteoformObject.selectedRefSeqIndex];
+
+                                            diffFromRefSequenceResult = JsDiff.diffChars(
+                                                translatedRefSequenceForDiffCompare,
+                                                _this._formatProteoformSequenceString(
+                                                    thisProteoformObject.sequence,
+                                                    thisProteoformObject.strand === '-'
+                                                ) /*.replace(/\[.*?\]|\(|\)|\./g,'')*/
+                                            );
+
+                                            // Filter the PTM (modification)
+                                            diffFromRefSequenceResult.forEach(
+                                                function (item, index) {
+                                                    if(item.added === true && /\[.*?]/g.test(item.value) === true)
+                                                    {
+                                                        let ptmLength = 0;
+                                                        let matches = item.value.match(/\[.*?]/g);
+                                                        matches.forEach(
+                                                            (item) => { ptmLength += item.length }
+                                                        );
+                                                        matches = /\[(.*?)]/g.exec(item.value);
+                                                        let ptmContent = matches[1];
+                                                        let ptmColor;
+                                                        if(_this.config.PTMColor[ptmContent.split(';')[0]] !== undefined)
+                                                        {
+                                                            ptmColor = _this.config.PTMColor[ptmContent.split(';')[0]];
+                                                        }
+                                                        else
+                                                        {
+                                                            ptmColor = _this.config.PTMColor['default'];
+                                                        }
+
+                                                        diffFromRefSequenceResult[index].modification = {
+                                                            length: ptmLength,
+                                                            content: ptmContent,
+                                                            color: ptmColor
+                                                        };
+                                                    }
+                                                }
+                                            );
+
+                                            window.BEYONDGBrowse.msScanDataInfoStore[thisProteoformObject.scanId].diffFromRefSequenceResult = diffFromRefSequenceResult;
+                                        }
+
+                                        let massAndIntensityMappingResult = undefined;
+                                        let maxIntensityValue = undefined;
+                                        if(
+                                            window.BEYONDGBrowse.msScanDataInfoStore.hasOwnProperty(thisProteoformObject.scanId) &&
+                                            typeof window.BEYONDGBrowse.msScanDataInfoStore[thisProteoformObject.scanId].massAndIntensityMappingResult == "object" &&
+                                            window.BEYONDGBrowse.msScanDataInfoStore[thisProteoformObject.scanId].maxIntensityValue
+                                        )
+                                        {
+                                            massAndIntensityMappingResult =
+                                                window.BEYONDGBrowse.msScanDataInfoStore[thisProteoformObject.scanId].massAndIntensityMappingResult;
+                                            maxIntensityValue =
+                                                window.BEYONDGBrowse.msScanDataInfoStore[thisProteoformObject.scanId].maxIntensityValue;
+                                        }
+                                        else
+                                        {
+                                            massAndIntensityMappingResult = _this._calcMSScanMass_v2(
+                                                thisProteoformObject.sequence,
+                                                thisProteoformObject.arrMSScanMassArray,
+                                                thisProteoformObject.arrMSScanPeakAundance,
+                                                thisProteoformObject.arrIonsNum
+                                            );
+                                            // Eg: massAndIntensityMappingResult[0]
+                                            // {
+                                            //     amino_acid: "F"
+                                            //     key: 3555.93025
+                                            //     label: "A0"
+                                            //     position: 31
+                                            //     value: 4461.31
+                                            // }
+
+                                            // Offset the position
+                                            // mappingResultObjectArray.forEach(
+                                            //     (item, index) => {
+                                            //         mappingResultObjectArray[index].oldPosition = item.position;
+                                            //     }
+                                            // );
+                                            // for(let i = 0; i < mappingResultObjectArray.length; i++)
+                                            // {
+                                            //     let j = 0;
+                                            //     let accumulator;
+                                            //     for(accumulator = diffFromRefSequenceResult[j].count;
+                                            //         j < diffFromRefSequenceResult.length &&
+                                            //         accumulator < mappingResultObjectArray[i].position
+                                            //         ; j++, accumulator += diffFromRefSequenceResult[j].count
+                                            //     )
+                                            //     {
+                                            //         if(diffFromRefSequenceResult[j].removed === true)
+                                            //         {
+                                            //             mappingResultObjectArray[i].position += diffFromRefSequenceResult[j].count;
+                                            //         }
+                                            //         if(diffFromRefSequenceResult[j].added === true)
+                                            //         {
+                                            //             if(diffFromRefSequenceResult.modification === undefined)
+                                            //             {
+                                            //                 // Not PTM
+                                            //                 mappingResultObjectArray[i].position -= diffFromRefSequenceResult[j].count;
+                                            //             }
+                                            //         }
+                                            //     }
+                                            // }
+
+                                            // Calculate the leftBaseInBp
+                                            massAndIntensityMappingResult.forEach(
+                                                (item, index) => {
+                                                    massAndIntensityMappingResult[index].leftBaseInBp =
+                                                        thisProteoformStartPosition + 3 * item.position;
+                                                }
+                                            );
+
+                                            // Find the max intensity
+                                            maxIntensityValue = Math.max.apply(
+                                                null,
+                                                massAndIntensityMappingResult.map(
+                                                    (item) => item.intensityValue
+                                                )
+                                            );
+                                            maxIntensityValue = maxIntensityValue === 0 ? 10000.0 : maxIntensityValue;
+
+                                            window.BEYONDGBrowse.msScanDataInfoStore[thisProteoformObject.scanId].massAndIntensityMappingResult = massAndIntensityMappingResult;
+                                            window.BEYONDGBrowse.msScanDataInfoStore[thisProteoformObject.scanId].maxIntensityValue = maxIntensityValue;
+                                            SnowConsole.info('massAndIntensityMappingResult', massAndIntensityMappingResult);
+                                        }
+
+                                        _this._publishDrawProteoformSequenceEvent(
+                                            thisProteoformObject.sequence,
+                                            thisProteoformStartPosition,
+                                            thisProteoformEndPosition,
+                                            isThisProteoformReverse,
+                                            thisProteoformObject.scanId,
+                                            massAndIntensityMappingResult,
+                                            thisMsScanTrackId,
+                                            thisProteoformObject.selectedRefSeqIndex,
+                                            diffFromRefSequenceResult
+                                        );
+
+                                        _this.inherited(_arguments);
+                                    }
+
+                                },
+                                function(errorReason) {
+                                    console.error('Retrieve reference genome sequence fail!', errorReason);
+                                }
+                            );
+
+                        }
+                    );
+                },
+
+                fillBlock: function(renderArgs) {
+                    let _this = this;
+                    let leftBase = renderArgs.leftBase;
+                    let rightBase = renderArgs.rightBase;
+                    // let blockIndex = renderArgs.blockIndex;
+                    // let blockObject = renderArgs.block;
+                    // let blockWidth = blockObject.domNode.offsetWidth;
+                    // let scaleLevel = renderArgs.scale;
+
+                    renderArgs.showMzValue = _this.config.showMzValue === true;
+
+                    let isAlignByIonPosition = _this.config.alignByIonPosition === true;
+                    if(isAlignByIonPosition)
+                    {
+                        renderArgs.proteoformStartPosition = _this.proteoformStartPosition;
+                        renderArgs.scanId = _this.scanId;
+                        renderArgs.massAndIntensityMappingResult =
+                            window.BEYONDGBrowse.msScanDataInfoStore[_this.scanId].massAndIntensityMappingResult;
+                        renderArgs.maxIntensityValue =
+                            window.BEYONDGBrowse.msScanDataInfoStore[_this.scanId].maxIntensityValue;
+                        _this.fillHistograms(renderArgs, true);
+                    }
+                    else
+                    {
+                        renderArgs.dataToDraw = _this._filterMSScanMassMappingResultForCurrentBlock(
+                            leftBase,
+                            rightBase,
+                            window.BEYONDGBrowse.msScanDataInfoStore[_this.scanId].massAndIntensityMappingResult,
+                            _this.proteoformStartPosition,
+                        );
+                        _this.fillHistograms(renderArgs, false);
+                    }
+                },
+
+                fillBlock_Old: function(renderArgs)
                 {
                     let _this = this;
                     let blockIndex = renderArgs.blockIndex;
@@ -1085,13 +1549,13 @@ define(
                         function (refGenomeSeq)
                         {
                             // #2. Translate genome sequence into conceptual protein sequences
-                            let translatedProteinSequence = _this._translateGenomeSequenceToProtein(refGenomeSeq, false);
-                            console.info('refGenomeSeq:', leftBase, rightBase, refGenomeSeq);
-                            console.info('translatedProteinSequence:', leftBase, rightBase, translatedProteinSequence);
+                            let translatedProteinSequence = _this._translateGenomeSequenceToProtein(refGenomeSeq, false, leftBase);
+                            SnowConsole.info('refGenomeSeq:', leftBase, rightBase, refGenomeSeq);
+                            SnowConsole.info('translatedProteinSequence:', leftBase, rightBase, translatedProteinSequence);
                             proteinInfoObject.translatedReferenceSequence = translatedProteinSequence;
 
                             // #3. Query BeyondGBrowse backend, return 'promise' produced by dojo/request
-                            return _this._queryFeatures(_this.refSeq.name, leftBase, rightBase);
+                            return _this._queryMsScanDataFromBackend(_this.refSeq.name, leftBase, rightBase);
                         },
                         function (errorReason)
                         {
@@ -1106,19 +1570,21 @@ define(
                             {
                                 let fullRangeLeftPos = parseInt(recordObjectArray[0]._start);
                                 let fullRangeRightPos = parseInt(recordObjectArray[0].end);
+                                let fullRangeLeftPosExtended = fullRangeLeftPos - 2;
+                                let fullRangeRightPosExtended = fullRangeRightPos + 2;
                                 // #5. Retrieve ENTIRE reference genome sequence for proteoform
                                 _this.store.getReferenceSequence(
                                     {
                                         ref: _this.refSeq.name,
-                                        start: fullRangeLeftPos,
-                                        end: fullRangeRightPos
+                                        start: fullRangeLeftPosExtended - 1,
+                                        end: fullRangeRightPosExtended + 3 - ((fullRangeRightPos - fullRangeLeftPos) % 3)
                                     },
                                     function( refGenomeSequenceForProteoform ) {
                                         // #6. Translate reference genome sequences corresponding to proteoform
                                         let translatedRefSequenceForProteoform =
-                                            _this._translateGenomeSequenceToProtein(refGenomeSequenceForProteoform, false);
-                                        console.info('refGenomeSequenceForProteoform:', fullRangeLeftPos, fullRangeRightPos, refGenomeSequenceForProteoform);
-                                        console.info('translatedRefSequenceForProteoform:', fullRangeLeftPos, fullRangeRightPos, translatedRefSequenceForProteoform);
+                                            _this._translateGenomeSequenceToProtein(refGenomeSequenceForProteoform, false, fullRangeLeftPos - 1, fullRangeRightPos);
+                                        SnowConsole.info('refGenomeSequenceForProteoform:', fullRangeLeftPos, fullRangeRightPos, refGenomeSequenceForProteoform);
+                                        SnowConsole.info('translatedRefSequenceForProteoform:', fullRangeLeftPos, fullRangeRightPos, translatedRefSequenceForProteoform);
                                         proteinInfoObject.translatedRefSequenceForProteoform = translatedRefSequenceForProteoform;
 
                                         proteinInfoObject.requestedProteoformObjectArray = _this._parseRequestedObject(recordObjectArray);
@@ -1150,75 +1616,95 @@ define(
                     mapTranslatedProteinSequenceToRequestedProteoformDeferred.then(
                         function (proteinInfoObject)
                         {
-                            console.info('proteinInfoObject:', proteinInfoObject);
+                            SnowConsole.info('proteinInfoObject:', proteinInfoObject);
                             // #8. Sort the json array responded from BeyondGBrowse backend (DESCEND),
                             //     according to the SIMILARITY between proteoform and conceptual protein sequence,
                             //     implemented using Longest Common SubSequence (LCS) algorithm
                             for(let i=0; i < proteinInfoObject.requestedProteoformObjectArray.length; i++)
                             {
-                                // 2019-08-14: At first, we format proteoform sequence of each scan.
-                                //             If strand is <->, reverse sequence, arrMSScanMassArray, arrMSScanPeakAundance
-                                proteinInfoObject.requestedProteoformObjectArray[i].sequence =
-                                    _this._formatProteoformSequenceString(
-                                        proteinInfoObject.requestedProteoformObjectArray[i].sequence,
-                                        proteinInfoObject.requestedProteoformObjectArray[i].strand === '-' ? true : false
-                                    );
-                                if(proteinInfoObject.requestedProteoformObjectArray[i].strand === '-')
+                                if(
+                                    window.BEYONDGBrowse.requestedProteoformObjectArray.hasOwnProperty(
+                                        proteinInfoObject.requestedProteoformObjectArray[i].scanId
+                                    ) && typeof window.BEYONDGBrowse.requestedProteoformObjectArray[
+                                        proteinInfoObject.requestedProteoformObjectArray[i].scanId
+                                    ] == "object"
+                                )
                                 {
-                                    proteinInfoObject.requestedProteoformObjectArray[i].arrMSScanMassArray =
-                                        proteinInfoObject.requestedProteoformObjectArray[i].arrMSScanMassArray.reverse();
-                                    proteinInfoObject.requestedProteoformObjectArray[i].arrMSScanPeakAundance =
-                                        proteinInfoObject.requestedProteoformObjectArray[i].arrMSScanPeakAundance.reverse();
+                                    proteinInfoObject.requestedProteoformObjectArray[i] =
+                                        window.BEYONDGBrowse.requestedProteoformObjectArray[
+                                            proteinInfoObject.requestedProteoformObjectArray[i].scanId
+                                        ];
                                 }
-
-                                const proteoformWithoutModificationToCompare =
-                                    proteinInfoObject.requestedProteoformObjectArray[i].sequence.replace(
-                                        /\[.*?\]|\(|\)|\./g,
-                                        ''
-                                    );
-
-                                proteinInfoObject.requestedProteoformObjectArray[i].lcsMatrix = [];
-                                proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray = [];
-                                for(let indexJ = 0; indexJ < 3; indexJ++)
+                                else
                                 {
-                                    let translatedRefSequenceForProteoformToCompare =
-                                        proteinInfoObject.requestedProteoformObjectArray[i].strand === '-' ?
-                                            proteinInfoObject.translatedRefSequenceForProteoform[3 + indexJ] :
-                                            proteinInfoObject.translatedRefSequenceForProteoform[indexJ];
-
-
-                                    proteinInfoObject.requestedProteoformObjectArray[i].lcsMatrix.push(
-                                        _this._getLongestCommonSubSequenceMatrix(
-                                            translatedRefSequenceForProteoformToCompare,
-                                            proteoformWithoutModificationToCompare
-                                        )
-                                    );
-
-                                    proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray.push(
-                                        _this._getLcsMatrixLength(
-                                            translatedRefSequenceForProteoformToCompare,
-                                            proteoformWithoutModificationToCompare,
-                                            proteinInfoObject.requestedProteoformObjectArray[i].lcsMatrix[indexJ]
-                                        )
-                                    );
-                                }
-
-                                proteinInfoObject.requestedProteoformObjectArray[i].selectedRefSeqIndex = 0;
-                                proteinInfoObject.requestedProteoformObjectArray[i].lcsLength =
-                                    proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray[0];
-                                for(let index in proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray)
-                                {
-                                    if(
-                                        proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray[index] >
-                                        proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray[
-                                            proteinInfoObject.requestedProteoformObjectArray[i].selectedRefSeqIndex
-                                        ]
-                                    )
+                                    // 2019-08-14: At first, we format proteoform sequence of each scan.
+                                    //             If strand is <->, reverse sequence, arrMSScanMassArray, arrMSScanPeakAundance
+                                    proteinInfoObject.requestedProteoformObjectArray[i].sequence =
+                                        _this._formatProteoformSequenceString(
+                                            proteinInfoObject.requestedProteoformObjectArray[i].sequence,
+                                            proteinInfoObject.requestedProteoformObjectArray[i].strand === '-' ? true : false
+                                        );
+                                    if(proteinInfoObject.requestedProteoformObjectArray[i].strand === '-')
                                     {
-                                        proteinInfoObject.requestedProteoformObjectArray[i].selectedRefSeqIndex = index;
-                                        proteinInfoObject.requestedProteoformObjectArray[i].lcsLength =
-                                            proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray[index];
+                                        proteinInfoObject.requestedProteoformObjectArray[i].arrMSScanMassArray =
+                                            proteinInfoObject.requestedProteoformObjectArray[i].arrMSScanMassArray.reverse();
+                                        proteinInfoObject.requestedProteoformObjectArray[i].arrMSScanPeakAundance =
+                                            proteinInfoObject.requestedProteoformObjectArray[i].arrMSScanPeakAundance.reverse();
                                     }
+
+                                    const proteoformWithoutModificationToCompare =
+                                        proteinInfoObject.requestedProteoformObjectArray[i].sequence.replace(
+                                            /\[.*?\]|\(|\)|\./g,
+                                            ''
+                                        );
+
+                                    proteinInfoObject.requestedProteoformObjectArray[i].lcsMatrix = [];
+                                    proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray = [];
+                                    for(let indexJ = 0; indexJ < 3; indexJ++)
+                                    {
+                                        let translatedRefSequenceForProteoformToCompare =
+                                            proteinInfoObject.requestedProteoformObjectArray[i].strand === '-' ?
+                                                proteinInfoObject.translatedRefSequenceForProteoform[3 + indexJ] :
+                                                proteinInfoObject.translatedRefSequenceForProteoform[indexJ];
+
+
+                                        proteinInfoObject.requestedProteoformObjectArray[i].lcsMatrix.push(
+                                            _this._getLongestCommonSubSequenceMatrix(
+                                                translatedRefSequenceForProteoformToCompare,
+                                                proteoformWithoutModificationToCompare
+                                            )
+                                        );
+
+                                        proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray.push(
+                                            _this._getLcsMatrixLength(
+                                                translatedRefSequenceForProteoformToCompare,
+                                                proteoformWithoutModificationToCompare,
+                                                proteinInfoObject.requestedProteoformObjectArray[i].lcsMatrix[indexJ]
+                                            )
+                                        );
+                                    }
+
+                                    proteinInfoObject.requestedProteoformObjectArray[i].selectedRefSeqIndex = 0;
+                                    proteinInfoObject.requestedProteoformObjectArray[i].lcsLength =
+                                        proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray[0];
+                                    for(let index in proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray)
+                                    {
+                                        if(
+                                            proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray[index] >
+                                            proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray[
+                                                proteinInfoObject.requestedProteoformObjectArray[i].selectedRefSeqIndex
+                                                ]
+                                        )
+                                        {
+                                            proteinInfoObject.requestedProteoformObjectArray[i].selectedRefSeqIndex = parseInt(index);
+                                            proteinInfoObject.requestedProteoformObjectArray[i].lcsLength =
+                                                proteinInfoObject.requestedProteoformObjectArray[i].lcsLengthArray[index];
+                                        }
+                                    }
+
+                                    window.BEYONDGBrowse.requestedProteoformObjectArray[
+                                        proteinInfoObject.requestedProteoformObjectArray[i].scanId
+                                    ] = proteinInfoObject.requestedProteoformObjectArray[i];
                                 }
                             }
 
@@ -1269,9 +1755,14 @@ define(
                                 let thisProteoformScanId = thisProteoformObject.scanId;
                                 let thisProteoformStartPosition = thisProteoformObject._start;
                                 let thisProteoformEndPosition = thisProteoformObject.end;
+                                // 2019-11-25 Proteoform add offset by 3+x bp
+                                // let proteoformPositionOffset = 3 + Math.abs((thisProteoformStartPosition - leftBase) % 3);
+                                let proteoformPositionOffset = 0;
+                                thisProteoformStartPosition += proteoformPositionOffset;
+                                thisProteoformEndPosition += proteoformPositionOffset;
                                 let isThisProteoformReverse = thisProteoformObject.strand === '-' ? true : false;
-                                console.info('msScanMassTrackId:', msScanMassTrackId);
-                                console.info('thisProteoformObject:', thisProteoformObject);
+                                SnowConsole.info('msScanMassTrackId:', msScanMassTrackId);
+                                SnowConsole.info('thisProteoformObject:', thisProteoformObject);
 
                                 // Update track label
                                 let labelTextToAppend = ' (Scan: ' + thisProteoformObject.scanId + ')';
@@ -1279,6 +1770,60 @@ define(
                                 {
                                     _this.scanId = thisProteoformObject.scanId;
                                     _this.setLabel(_this.originalLabelText + labelTextToAppend);
+                                }
+
+                                let diffFromRefSequenceResult = undefined;
+                                if(
+                                    window.BEYONDGBrowse.diffFromRefSequenceResult.hasOwnProperty(thisProteoformObject.scanId)
+                                    && typeof window.BEYONDGBrowse.diffFromRefSequenceResult[thisProteoformObject.scanId] == "object"
+                                )
+                                {
+                                    diffFromRefSequenceResult = window.BEYONDGBrowse.diffFromRefSequenceResult[thisProteoformObject.scanId];
+                                }
+                                else
+                                {
+                                    let translatedRefSequenceForDiffCompare =
+                                        isThisProteoformReverse ? proteinInfoObject.translatedRefSequenceForProteoform[
+                                        3 + thisProteoformObject.selectedRefSeqIndex
+                                            ] : proteinInfoObject.translatedRefSequenceForProteoform[
+                                            thisProteoformObject.selectedRefSeqIndex
+                                            ];
+                                    window.BEYONDGBrowse.diffFromRefSequenceResult[thisProteoformObject.scanId] =
+                                        diffFromRefSequenceResult = JsDiff.diffChars(
+                                            translatedRefSequenceForDiffCompare,
+                                            thisProteoformSequence /*.replace(/\[.*?\]|\(|\)|\./g,'')*/
+                                        );
+
+                                    // Filter the PTM (modification)
+                                    diffFromRefSequenceResult.forEach(
+                                        function (item, index) {
+                                            if(item.added === true && /\[.*?\]/g.test(item.value) === true)
+                                            {
+                                                let ptmLength = 0;
+                                                let matches = item.value.match(/\[.*?\]/g);
+                                                matches.forEach(
+                                                    (item) => { ptmLength += item.length }
+                                                );
+                                                matches = /\[(.*?)\]/g.exec(item.value);
+                                                let ptmContent = matches[1];
+                                                let ptmColor;
+                                                if(_this.config.PTMColor[ptmContent.split(';')[0]] !== undefined)
+                                                {
+                                                    ptmColor = _this.config.PTMColor[ptmContent.split(';')[0]];
+                                                }
+                                                else
+                                                {
+                                                    ptmColor = _this.config.PTMColor['default'];
+                                                }
+
+                                                diffFromRefSequenceResult[index].modification = {
+                                                    length: ptmLength,
+                                                    content: ptmContent,
+                                                    color: ptmColor
+                                                };
+                                            }
+                                        }
+                                    );
                                 }
 
                                 // #9. Calculating MsScanMass and mapping with proteoform ions
@@ -1292,19 +1837,12 @@ define(
                                 }
                                 else
                                 {
-                                    // window.BEYONDGBrowse.mSScanMassResultArray[thisProteoformObject.scanId] =
-                                    //     mappingResultObjectArray = _this._calcMSScanMass(
-                                    //         thisProteoformObject.sequence,
-                                    //         thisProteoformObject.arrMSScanMassArray,
-                                    //         thisProteoformObject.arrMSScanPeakAundance
-                                    //     );
-                                    window.BEYONDGBrowse.mSScanMassResultArray[thisProteoformObject.scanId] =
-                                        mappingResultObjectArray = _this._calcMSScanMass_v2(
-                                            thisProteoformObject.sequence,
-                                            thisProteoformObject.arrMSScanMassArray,
-                                            thisProteoformObject.arrMSScanPeakAundance,
-                                            thisProteoformObject.arrIonsNum
-                                        );
+                                    mappingResultObjectArray = _this._calcMSScanMass_v2(
+                                        thisProteoformObject.sequence,
+                                        thisProteoformObject.arrMSScanMassArray,
+                                        thisProteoformObject.arrMSScanPeakAundance,
+                                        thisProteoformObject.arrIonsNum
+                                    );
                                     // Eg: mappingResultObjectArray[0]
                                     // {
                                     //     amino_acid: "F"
@@ -1314,18 +1852,48 @@ define(
                                     //     value: 4461.31
                                     // }
 
-                                    console.info('mappingResultObjectArray:', mappingResultObjectArray);
-                                }
+                                    // Offset the position
+                                    // mappingResultObjectArray.forEach(
+                                    //     (item, index) => {
+                                    //         mappingResultObjectArray[index].oldPosition = item.position;
+                                    //     }
+                                    // );
+                                    // for(let i = 0; i < mappingResultObjectArray.length; i++)
+                                    // {
+                                    //     let j = 0;
+                                    //     let accumulator;
+                                    //     for(accumulator = diffFromRefSequenceResult[j].count;
+                                    //         j < diffFromRefSequenceResult.length &&
+                                    //         accumulator < mappingResultObjectArray[i].position
+                                    //         ; j++, accumulator += diffFromRefSequenceResult[j].count
+                                    //     )
+                                    //     {
+                                    //         if(diffFromRefSequenceResult[j].removed === true)
+                                    //         {
+                                    //             mappingResultObjectArray[i].position += diffFromRefSequenceResult[j].count;
+                                    //         }
+                                    //         if(diffFromRefSequenceResult[j].added === true)
+                                    //         {
+                                    //             if(diffFromRefSequenceResult.modification === undefined)
+                                    //             {
+                                    //                 // Not PTM
+                                    //                 mappingResultObjectArray[i].position -= diffFromRefSequenceResult[j].count;
+                                    //             }
+                                    //         }
+                                    //     }
+                                    // }
 
-                                // #10. Take out the parts that needed for current view block
-                                let filteredMSScanMassMappingResultArray = _this._filterMSScanMassMappingResultForCurrentBlock(
-                                    leftBase,
-                                    rightBase,
-                                    mappingResultObjectArray,
-                                    proteinInfoObject.requestedProteoformObjectArray[msScanMassTrackId].sequence,
-                                    proteinInfoObject.requestedProteoformObjectArray[msScanMassTrackId]._start,
-                                    proteinInfoObject.requestedProteoformObjectArray[msScanMassTrackId].end
-                                );
+                                    // Calculate the leftBaseInBp
+                                    mappingResultObjectArray.forEach(
+                                        (item, index) => {
+                                            mappingResultObjectArray[index].leftBaseInBp =
+                                                thisProteoformStartPosition + 3 * item.position;
+                                        }
+                                    );
+
+                                    window.BEYONDGBrowse.mSScanMassResultArray[thisProteoformObject.scanId] = mappingResultObjectArray;
+                                    SnowConsole.info('mappingResultObjectArray:', mappingResultObjectArray);
+                                }
 
                                 // #11. Draw proteoform sequence at the bottom of SnowSequenceTrack, including ions and modification mark
                                 _this._publishDrawProteoformSequenceEvent(
@@ -1336,11 +1904,11 @@ define(
                                     thisProteoformScanId,
                                     mappingResultObjectArray,
                                     msScanMassTrackId + 1,
-                                    proteinInfoObject.translatedRefSequenceForProteoform,
-                                    thisProteoformObject.selectedRefSeqIndex
+                                    // proteinInfoObject.translatedRefSequenceForProteoform,
+                                    thisProteoformObject.selectedRefSeqIndex,
+                                    diffFromRefSequenceResult
                                 );
 
-                                console.info('filteredMSScanMassMappingResultArray:', filteredMSScanMassMappingResultArray);
                                 renderArgs.showMzValue = _this.config.showMzValue === true;
                                 // #12. Draw protein mass spectrum histogram within current block region
                                 //      X-Axis: m/z
@@ -1351,15 +1919,23 @@ define(
                                     renderArgs.mappingResultObjectArray = mappingResultObjectArray;
                                     renderArgs.proteoformStartPosition = thisProteoformStartPosition;
                                     renderArgs.scanId = thisProteoformScanId;
-                                    _this.fillHistograms(renderArgs, true)
+                                    _this.fillHistograms(renderArgs, true);
                                 }
                                 else
                                 {
+                                    // #10. Take out the parts that needed for current view block
+                                    let filteredMSScanMassMappingResultArray = _this._filterMSScanMassMappingResultForCurrentBlock(
+                                        leftBase,
+                                        rightBase,
+                                        mappingResultObjectArray,
+                                        thisProteoformSequence,
+                                        thisProteoformStartPosition,
+                                        thisProteoformEndPosition
+                                    );
                                     renderArgs.dataToDraw = filteredMSScanMassMappingResultArray;
                                     _this.fillHistograms(renderArgs, false);
                                 }
                             }
-
                         }
                     );
 
@@ -1393,9 +1969,6 @@ define(
                                 _this.markBlockHeightOverflow(blockObject);
 
                             _this.heightUpdate(totalHeight, blockIndex);
-
-                            // this.renderFeatures(args, fRects);
-                            // this.renderClickMap(args, fRects);
                         }
 
                     );
